@@ -1,0 +1,254 @@
+---
+title: Is the Property Tax a Benefit Tax? Intrajurisdictional evidence from California
+  Proposition 13
+author: "Dimuthu Ratnadiwakara"
+date: "January 27, 2017"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    css: bodycss.css
+    fig_height: 6
+    fig_width: 12
+    number_section: yes
+    toc: yes
+setspace: doublespacing
+bibliography: C:\Users\dnratnadiwakara\OneDrive\library.bib
+---
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE,echo = FALSE)
+```
+
+```{r init,include=FALSE}
+rm(list=ls())
+path = "E:/tax_incident/"
+setwd(path)
+library(plyr)
+library(psych)
+library(stargazer)
+library(Matching)
+library(sandwich)
+library(ggplot2)
+output.type="text"
+
+# created by clean_California_Rent_Data.R
+rent_data <- readRDS(file = "California_Rent_Data.rds")
+rent_data <- rent_data[rent_data$rent>quantile(rent_data$rent,0.02,na.rm = TRUE) & rent_data$rent<quantile(rent_data$rent,0.98,na.rm = TRUE),]
+rent_data['last_sold_year'] <- as.numeric(format(rent_data$last_sold_date,"%Y"))
+rent_data['estimated_current_assesment'] <- rent_data$last_sold_price*(1.02)^(2017-rent_data$last_sold_year)
+rent_data['age'] <- 2017 - rent_data$Builtin
+```
+
+> <b>Abstract</b><br/> Economists disagree on whether the property tax is a "benefit tax" or a "capital tax". Under the benefit-tax view property tax is an efficient user charge and under the capital-tax view it is considered a distortionary tax. I study the effect of property taxes on single family house rent. If benefit-tax view is correct, there should not be a difference in the monthly rentals for identical houses in the same community. My identification strategy uses exogenous variation of property tax due to California proposition 13 and I show that monthly rentals are positively related to the property tax, which is inconsistent with predictions of benefit-tax view.
+
+# Introduction
+Long-standing and critical question of who pays the residential property tax is still far from resolved. Economic incidence (as opposed to statutory incidence) of property tax has been a controversial research topic in the last 50 years [@Nechyba2001, @Zodrow2007, @Sirmans2008, @fischel2011] and researchers disagree on whether the property tax is a "benefit tax" or a "capital tax". Benefit-tax view, which is closely linked to @Tiebout1956 was developed by @Hamilton1976 and @Fischel1986 and in these models property-tax payments are considered simply fees for services provided. In a Tiebout-Hamilton-Fischel world local governments offer a wide menu of alternative packages of local public services, and each individual household selects a community of residence to obtain its preffered combination of outputs (i.e. individuals "vote with your feet" according to @Tiebout1956). Under this view property tax is considered an efficient non-distortionary tax. Capital-tax view, which was initially developed by @Mieszkowski1972 and extended by @Zodrow1986 sees the tax as a levy on capital that leads to certain kinds of distortions both in housing markets and in local fiscal conditions. Under this view property tax drives capital investment out of high tax jurisdictions into low tax jurisdictions leading to to less than the economically efficient capital usage. Capital-tax view has quite different implications for the efficiency of local property-tax finance than does the benefit-tax view.  If capital view is correct then local property taxation is not necessarily such a good idea and the wave of anti-property tax measures may be justified on efficiency grounds. Many observers have noted that a resolution of this debate is among the more pressing issues in state and local public finance (Youngman, 2002; Fisher, 2009), especially since property taxes account for roughly three-fourths of total local tax revenues and nearly half of local own-source revenues (Alm, Buschman, and Sjoquist, 2011).
+
+Eventhough, the differences in the economic effects of the property tax under the two views are striking, empirically rejecting one view in favor of the other is challenging as the testable empirical implications are sufficiently similar[@Zodrow2007]. @Fischel2001 interprets the extensive evidence on near full interjurisdictional(@Oates1969,@Richardson1981, @Rosen1982,@Gallagher2013 and @mounlton2016) and intrajurisdictional [@Yinger1988] capitalization -- changes in property value due to changes in property taxes -- as evidence supporting benefit view ^[see @Sirmans2008 for a comprehensive review of litreture on tax capitalization in real estate]. He argues that given sufficiently restrictinve zoning by municipalties^[zoning is required to overcome the free rider problem], "benefits from such things as superior local schools and low crime rates, on the one hand, and low tax rates, on the other, tend to manifest themselves in the price of local dwellings. People are willing to pay more, other things beingequal, to live in communities with comparatively good services and low taxes and this translates into higher prices for local properties".  But @Kotlikoff1987 show that interjurisdictional capitalization is not inconsistant with the capital-tax view and more recently  @Zodrow2014 shows that intrajurisdictional capitalization does not provide compelling evidence to distinguish between two views. So today after nearly 50 years of research economists are still not convinced which view is closer to the truth. 
+
+In this paper, I contribute to this debate by looking at the impact of California proposition 13 on single family home rental prices [and sales prices] using the data extracted from rent [and sales] listings in zillow.com. Intrajurisdictional capitalization is the key element in the most plausible theoretical exposition of the benefit view, originally developed by @Hamilton1976, under which perfect capitalization of intrajurisdictional fiscal differentials^[present value of public services - tax] is required to convert the property tax into a benefit tax in communities with heterogeneous housing. For rental housing this means that landloards of homogeneous houses in the same community should bear any difference in the property tax and the rental prices should be the same as all the tenets receive the sampe bundle of housing services and public services. Evidence of no relationship between property tax and rent values for homogeneous houses in the same community would be consistent with benefit-tax view and a positive relationship between property tax and rent values would be inconsistent with the benefit-tax view. A positive relationship implies that landloards are able pass on their tax liabilities to the tenents and rents do not reflect the true price of housing consumption and consumption of local public services.
+
+There are several econometric challenges when studying the impact on property tax on house prices and rents. The first problem is that the property tax amount is endogeneous. The assesment value of a property may contain information that is unobservable to econometricians.  This problem is widely recognized in the litreture and many studies employ two-stage least squres to address this (see @Sirmans2008 for a comprehensive review). The second problem is ommited variable bias. Most previous studies do not control for the structural characteristics of the house and neighborhood characteristics but these are correlated with the assesed value of the house. Another major problem is selection of an accurate measure of public service quality as the value of the houses are also affected by the quality of local public services. I rely on the exogenous variation of intrajurisdictional property taxes due to propositino 13 to deal with endogeneity concenrns. A house purchased when the prices were higher gets a higher tax bill compared to a house that was purchased when the house prices were lower.  This difference in the tax amount is unrelated to the current value of the house and the quality of local public services. Further I avoid the concerns related to measurement errors or ommited varaibles related to the quality of the public services by looking at the property tax burdens on otherwise similar homes within the same community. All residents of the same community receive the same services and I do not have to deal with the messy econometric problem of comparing public services in different communites like in @Carroll1994 or @Key2016. Finally I control for a whole host of housing characteristics. 
+
+My results show....
+
+#  Impact of California Proposition 13 on Property Taxes
+
+Proposition 13, which is officially called the People's Initiative to Limit Property Taxation, was enacted in 1978 and it limits the maximum amount of tax on real property to be 1% and annual increase in the assesment value to 2%. A reassesment of the property is allowed only following an ownership change or new construction[@Oakland1979]. This leads to a situation where two similar houses in the same community whose residents have access to the same bundle of local public services paying significantly different tax amounts. The residents in the house that was purchased when the house prices are higher gets a larger tax bill compared to the residents in a similar house in the same community which was purchased way back when the house prices were low. The figure below shows an example of two houses in Anaheim California which were sold recently. Both these houses were sold for similar amounts in January 2016 and December 2015. Both houses have 3 bedrooms and 2 path rooms and both were built in 1955. These two houses are very close to each other as shown in the map and therefore we can assume they have access to the same bundle of local public services. According to the benefit-tax view, if we ignore the most recent sale, both these houses should rent at the same price and the differences in property tax amounts landlords pay should not be reflected on the monthly rent. 
+
+![Figure 1: Two recently sold houses in Anaheim, CA](C:/Users/dnratnadiwakara/OneDrive/taxincidence/ex1.png)
+
+Figure 2 shows that eventhough these two houses are very similar to each other, prior to recent sale, the property tax bills were significantly different. House 2 (2516 W Merle Pl) was never sold in the past and therefore it is subject to the maximum of 2% appreciation of assesment value even when the house prices were increasing at significantly higher rates.  House 1 (809 S Velare St), on the other hand, was sold for 550,000 in 2005 and 282,000 in 2009 which reset the assesment value of the house according to the proposisiotn 13.  We can see that property tax bill for house 1 is significantly higher following the sale in 2005 and it was significantly reduced (but still higher than house 2) following the sale in 2009 for a low amount. 
+
+![Figure 2: Property taxes paid](C:/Users/dnratnadiwakara/OneDrive/taxincidence/fig1.png)
+
+
+
+
+# Motivation and Hypothesis
+
+Under the benefit-tax view, there would be no relationship between property tax and rent values within a community
+
+# Data
+From zillow.com. 3,030 rental listings in California from 192 zipcodes which had a population of more than 50000 in 2010
+
+## Summary Statistics
+```{r summarystats}
+stargazer(rent_data[, c("rent","last_sold_year","beds","baths","sqft","zest_value","avg_school_rating","avg_school_distance","Builtin","Lot")], type = output.type, summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),notes = "For rent houses in January 2017, in 192 zipcodes in California where population is larger than 50,000")
+```
+
+#Results
+
+For a given community(i.e. zipcode), I expect that the current assesment value to have no impact on the rental price after controlling for the characteristics such as square footage, number of bedrooms, number of bathrooms, estimated value of the house and age of the house. Zillow does not provide property tax details for the rental listings. As the first step I estimate the current assesment value using last sold price, last sold date and assuming 2% as annual appreciation rate of the assesment (In the future I can estimate the annual appreciation rate more accurately using the information on houses that were sold). i.e. $\text{current_assesment} = \text{last_sold_price}*(1.02)^{2017-\text{last_sold_year}}$. First I etimate the following regression using the estimated current assesment.
+
+$$ rent = \alpha + \beta_1 \text{current assesment} + \gamma X + \epsilon $$
+
+The variable of interest is $\beta_1$ and if benefit-tax view is correct the value of $\beta_1$ should not be different from zero.
+
+
+## Basic Regression
+```{r basicreg}
+
+
+formula1 <- as.formula("rent ~ last_sold_year + sqft + beds+baths+zest_value+factor(zip)")
+formula1_1 <- as.formula("rent ~ last_sold_year + sqft + beds + baths+zest_value+factor(zip)+I(last_sold_year>=2012)")
+formula2 <- as.formula("rent ~ last_sold_year+sqft +beds + baths + Builtin+ zest_value+ avg_school_rating + avg_school_distance + factor(Pets)+factor(zip)")
+formula3 <- as.formula("rent ~ log(estimated_current_assesment)+sqft +beds + baths + zest_value+age+ factor(Pets)+  avg_school_rating + avg_school_distance +factor(zip)")
+formula4 <- as.formula("rent ~ log(estimated_current_assesment)+sqft +beds + baths + zest_value+factor(zip)")
+
+ols <- list()
+# ols[[1]] <- lm(formula1, data=rent_data)
+# ols[[2]] <- lm(formula2, data=rent_data)
+ols[[1]] <- lm(formula4, data=rent_data[is.finite(log(rent_data$last_sold_price)),])
+ols[[2]] <- lm(formula3, data=rent_data[is.finite(log(rent_data$last_sold_price)),])
+ols[[3]] <- lm(formula1_1, data=rent_data[(rent_data$last_sold_year<=2006 & rent_data$last_sold_year>=1995) |rent_data$last_sold_year>=2012 ,])
+ols[[4]] <- lm(formula1, data=rent_data[(rent_data$last_sold_year>=2006 & rent_data$last_sold_year<=2012),])
+
+se <- list()
+for(i in 1:3) {
+ se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
+}
+
+
+mfx <- NULL
+# mfx[1] <- ols[[1]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+# mfx[2] <- ols[[2]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[1] <- ols[[1]]$coefficients[2]*sd(log(rent_data[is.finite(log(rent_data$estimated_current_assesment)),]$estimated_current_assesment),na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[2] <- ols[[2]]$coefficients[2]*sd(log(rent_data[is.finite(log(rent_data$estimated_current_assesment)),]$estimated_current_assesment),na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[3] <- ols[[3]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[4] <- ols[[4]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+
+
+stargazer(ols,omit = c("zip"),omit.labels = c("zip"),type="text",no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors",column.labels = c("All Years","All Years","Increasing Years","Decreasing Years","All Years"),add.lines = list(c("Mfx % of mean per 1 sd",round(mfx*100,2)))) #,report=('vc*p'),se=se
+
+```
+
+
+The figure below shows the changes in house price index for California. We can see that from 2000 to 2006 and from 2012 to 2016 house prices increased by significantly higher rates (17% and 10% respectively) than allowed 2% increase under the proposition 13. This means that if a house is last sold later in these periods, those houses will receive significantly higher property tax bills compared to houses last sold earlier in the period. The opposite is true for the period from 2006 to 2012. During this periods houses last sold later in the period would receive a lower tax bill.
+
+## California HPI
+```{r cahpi}
+setwd(path)
+
+# source: All-Transactions House Price Index for California (CASTHPI) from https://fred.stlouisfed.org/series/CASTHPI
+ca_hpi <- read.csv(file="CASTHPI.csv")
+ca_hpi$DATE <- as.Date(as.character(ca_hpi$DATE))
+ca_hpi <- ca_hpi[ca_hpi$DATE>"1995-01-01",]
+ggplot(ca_hpi, aes(DATE, CASTHPI)) + geom_line()  + xlab("") + ylab("House Price Index")+ theme_bw(base_size = 14)
+```
+
+
+
+```{r sold_year_dummy}
+library(reshape2)
+formula_dummy <- as.formula("rent ~ factor(last_sold_year)+sqft + avg_school_rating + 
+    avg_school_distance +beds + baths + + Builtin+ zest_value+ factor(Pets)+factor(zip)")
+ols<- lm(formula_dummy, data=rent_data[rent_data$last_sold_year>=2000 ,])
+x = seq(2000,2015,1) #
+y = as.vector(ols$coefficients[2:17])
+plot_data <- as.data.frame(cbind(x,y))
+names(plot_data) <- c("year","coefficient")
+
+ca_hpi['year']<- as.numeric(format(ca_hpi$DATE,"%Y"))
+plot_data_hpi <- ddply(ca_hpi,.(year),summarise,hpi=mean(CASTHPI,na.rm = TRUE))
+plot_data_hpi <- plot_data_hpi[plot_data_hpi$year<=2015 & plot_data_hpi$year>=2000,]
+
+plot_data <- merge(plot_data,plot_data_hpi,by="year")
+rm(plot_data_hpi)
+# plot_data$year <- sapply(plot_data$year,function(x) as.Date(paste(x,"-01-01",sep = "")))
+# plot_data$year <- as.Date(plot_data$year,origin = "1970-01-01")
+
+plot_data$coefficient = (plot_data$coefficient-mean(plot_data$coefficient))/sd(plot_data$coefficient)
+plot_data$hpi = (plot_data$hpi-mean(plot_data$hpi))/sd(plot_data$hpi)
+
+plot_data <- melt(plot_data, id="year")
+
+y_min <- min(plot_data$value)*0.99
+y_max <- max(plot_data$value)
+
+ggplot(plot_data, aes(year, value,colour=plot_data$variable)) + geom_point()+ geom_line()+ theme_bw(base_size = 14)+ scale_color_manual(name="",values=c("gray20", "gray60"))+xlab("") +ylab("")+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.text.y=element_blank(),axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())
+
+cor(plot_data[plot_data$variable=="coefficient",]$value,plot_data[plot_data$variable=="hpi",]$value)
+```
+
+```{r propertytax}
+setwd(path)
+
+
+# zips <- unique(rent_data$zip)
+# years <- seq(2000,2017,1)
+# property_tax_rate <- NULL
+# for(zip in zips){
+#   for(year in years){
+#     property_tax_rate <- rbind(property_tax_rate,c(zip,year,0.02,0.01))
+#   }
+# }
+# property_tax_rate <- as.data.frame(property_tax_rate)
+# names(property_tax_rate) <- c("zip","year","growth","milage")
+# saveRDS(property_tax_rate,file="property_tax_rate.rds")
+
+property_tax_rate <- readRDS(file="property_tax_rate.rds")
+property_tax_rate <- na.omit(property_tax_rate)
+
+rent_data_2000 <- rent_data[rent_data$last_sold_year>=2000 & rent_data$last_sold_year<=2017 & !is.na(rent_data$last_sold_date) &  !is.na(rent_data$last_sold_price),]
+
+for(i in 1:nrow(rent_data_2000)){
+  # cat(i," ")
+  soldyear = rent_data_2000[i,]$last_sold_year
+  price = rent_data_2000[i,]$last_sold_price
+  zip = rent_data_2000[i,]$zip
+  
+
+    for(year in soldyear:2017){
+      price = price*(1+property_tax_rate[property_tax_rate$zip==zip & property_tax_rate$year==year,]$growth)
+    }
+    rent_data_2000[i,'prop_tax_2017'] <- price * property_tax_rate[property_tax_rate$zip==zip & property_tax_rate$year==2015,]$milage
+}
+
+
+
+rent_data_2000['pv_of_future_tax'] <- rent_data_2000$prop_tax_2017/0.03
+
+rent_data_2000['pv_prop_tax_pct'] <- rent_data_2000$pv_of_future_tax/rent_data_2000$zest_value
+
+# following histogram shows how this treatment is unfair. But this is not the topic of this paper
+ggplot(data=rent_data_2000, aes(pv_prop_tax_pct)) + geom_histogram(breaks=seq(0,0.6, by=0.05),col="black")+ylab("Number of Houses")+xlab("PV of Property Tax/House Value") + theme_bw(base_size = 14)
+```
+
+```{r proptaxreg}
+
+
+formula1 <- as.formula("rent ~ sqft + avg_school_rating + avg_school_distance +beds + baths +  zest_value+factor(zip)")
+
+
+ols <- list()
+ols[[1]] <- lm(formula1, data=rent_data_2000)
+
+rent_data_2000['rent_resid'] <- rent_data_2000$rent - predict(ols[[1]],newdata = rent_data_2000)
+
+rent_data_2000['prop_tax_2007_cat'] <- floor(rent_data_2000$prop_tax_2017/50)
+
+
+formula2 <- as.formula("rent_resid ~ prop_tax_2017+I(prop_tax_2017^2)+I(prop_tax_2017^3)+I(prop_tax_2017^4)+I(prop_tax_2017^5)")
+formula3 <- as.formula("rent_resid ~ factor(prop_tax_2007_cat)")
+
+
+ols[[2]] <- lm(formula2, data=rent_data_2000)
+ols[[3]] <- lm(formula3, data=rent_data_2000[rent_data_2000$prop_tax_2017<=10000,])
+
+
+# se <- list()
+# for(i in 1:1) {
+#  se[[i]] <- sqrt(diag(vcovHAC(ols[[i]])))
+# }
+
+
+# mfx <- NULL
+# mfx[1] <- ols[[1]]$coefficients[2]*sd(rent_data_2000$pv_prop_tax_pct,na.rm = TRUE)/mean(rent_data_2000$rent,na.rm = TRUE)
+# # mfx[2] <- ols[[2]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+
+stargazer(ols,omit = c("zip","prop_tax_2007_cat"),omit.labels = c("zip","prop tax 2007 cat"),type="text",no.space = TRUE,omit.stat = c("f","ser"),notes= "Robust Standard Errors",column.labels = c("All Years"))
+```
+
+# References
