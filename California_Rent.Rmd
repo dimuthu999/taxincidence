@@ -2,22 +2,24 @@
 title: Is the Property Tax a Benefit Tax? Intrajurisdictional evidence from California
   Proposition 13
 author: "Dimuthu Ratnadiwakara"
-date: "January 27, 2017"
+date: "February, 2017"
 output:
-  pdf_document:
-    toc: yes
   html_document:
     css: bodycss.css
     fig_height: 6
     fig_width: 12
     number_section: yes
     toc: yes
-setspace: doublespacing
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+linestretch: 2
 bibliography: C:\Users\dnratnadiwakara\OneDrive\library.bib
 ---
 
 ```{r global_options, include=FALSE}
-knitr::opts_chunk$set(warning=FALSE, message=FALSE,echo = FALSE)
+knitr::opts_chunk$set(warning=FALSE, message=FALSE,echo = FALSE,results = 'asis')
 ```
 
 ```{r init,include=FALSE}
@@ -30,7 +32,8 @@ library(stargazer)
 library(Matching)
 library(sandwich)
 library(ggplot2)
-output.type="text"
+library(scales)
+output.type="html"
 
 # created by clean_California_Rent_Data.R
 rent_data <- readRDS(file = "California_Rent_Data.rds")
@@ -53,6 +56,10 @@ There are several econometric challenges when studying the impact on property ta
 
 My results show....
 
+
+<a href="#top">Back to top</a>
+
+
 #  Impact of California Proposition 13 on Property Taxes
 
 Proposition 13, which is officially called the People's Initiative to Limit Property Taxation, was enacted in 1978 and it limits the maximum amount of tax on real property to be 1% and annual increase in the assesment value to 2%. A reassesment of the property is allowed only following an ownership change or new construction[@Oakland1979]. This leads to a situation where two similar houses in the same community whose residents have access to the same bundle of local public services paying significantly different tax amounts. The residents in the house that was purchased when the house prices are higher gets a larger tax bill compared to the residents in a similar house in the same community which was purchased way back when the house prices were low. The figure below shows an example of two houses in Anaheim California which were sold recently. Both these houses were sold for similar amounts in January 2016 and December 2015. Both houses have 3 bedrooms and 2 path rooms and both were built in 1955. These two houses are very close to each other as shown in the map and therefore we can assume they have access to the same bundle of local public services. According to the benefit-tax view, if we ignore the most recent sale, both these houses should rent at the same price and the differences in property tax amounts landlords pay should not be reflected on the monthly rent. 
@@ -63,115 +70,13 @@ Figure 2 shows that eventhough these two houses are very similar to each other, 
 
 ![Figure 2: Property taxes paid](C:/Users/dnratnadiwakara/OneDrive/taxincidence/fig1.png)
 
-
-
-
-# Motivation and Hypothesis
-
-Under the benefit-tax view, there would be no relationship between property tax and rent values within a community
-
-# Data
-From zillow.com. 3,030 rental listings in California from 192 zipcodes which had a population of more than 50000 in 2010
-
-## Summary Statistics
-```{r summarystats}
-stargazer(rent_data[, c("rent","last_sold_year","beds","baths","sqft","zest_value","avg_school_rating","avg_school_distance","Builtin","Lot")], type = output.type, summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),notes = "For rent houses in January 2017, in 192 zipcodes in California where population is larger than 50,000")
-```
-
-#Results
-
-For a given community(i.e. zipcode), I expect that the current assesment value to have no impact on the rental price after controlling for the characteristics such as square footage, number of bedrooms, number of bathrooms, estimated value of the house and age of the house. Zillow does not provide property tax details for the rental listings. As the first step I estimate the current assesment value using last sold price, last sold date and assuming 2% as annual appreciation rate of the assesment (In the future I can estimate the annual appreciation rate more accurately using the information on houses that were sold). i.e. $\text{current_assesment} = \text{last_sold_price}*(1.02)^{2017-\text{last_sold_year}}$. First I etimate the following regression using the estimated current assesment.
-
-$$ rent = \alpha + \beta_1 \text{current assesment} + \gamma X + \epsilon $$
-
-The variable of interest is $\beta_1$ and if benefit-tax view is correct the value of $\beta_1$ should not be different from zero.
-
-
-## Basic Regression
-```{r basicreg}
-
-
-formula1 <- as.formula("rent ~ last_sold_year + sqft + beds+baths+zest_value+factor(zip)")
-formula1_1 <- as.formula("rent ~ last_sold_year + sqft + beds + baths+zest_value+factor(zip)+I(last_sold_year>=2012)")
-formula2 <- as.formula("rent ~ last_sold_year+sqft +beds + baths + Builtin+ zest_value+ avg_school_rating + avg_school_distance + factor(Pets)+factor(zip)")
-formula3 <- as.formula("rent ~ log(estimated_current_assesment)+sqft +beds + baths + zest_value+age+ factor(Pets)+  avg_school_rating + avg_school_distance +factor(zip)")
-formula4 <- as.formula("rent ~ log(estimated_current_assesment)+sqft +beds + baths + zest_value+factor(zip)")
-
-ols <- list()
-# ols[[1]] <- lm(formula1, data=rent_data)
-# ols[[2]] <- lm(formula2, data=rent_data)
-ols[[1]] <- lm(formula4, data=rent_data[is.finite(log(rent_data$last_sold_price)),])
-ols[[2]] <- lm(formula3, data=rent_data[is.finite(log(rent_data$last_sold_price)),])
-ols[[3]] <- lm(formula1_1, data=rent_data[(rent_data$last_sold_year<=2006 & rent_data$last_sold_year>=1995) |rent_data$last_sold_year>=2012 ,])
-ols[[4]] <- lm(formula1, data=rent_data[(rent_data$last_sold_year>=2006 & rent_data$last_sold_year<=2012),])
-
-se <- list()
-for(i in 1:3) {
- se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
-}
-
-
-mfx <- NULL
-# mfx[1] <- ols[[1]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
-# mfx[2] <- ols[[2]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
-mfx[1] <- ols[[1]]$coefficients[2]*sd(log(rent_data[is.finite(log(rent_data$estimated_current_assesment)),]$estimated_current_assesment),na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
-mfx[2] <- ols[[2]]$coefficients[2]*sd(log(rent_data[is.finite(log(rent_data$estimated_current_assesment)),]$estimated_current_assesment),na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
-mfx[3] <- ols[[3]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
-mfx[4] <- ols[[4]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
-
-
-stargazer(ols,omit = c("zip"),omit.labels = c("zip"),type="text",no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors",column.labels = c("All Years","All Years","Increasing Years","Decreasing Years","All Years"),add.lines = list(c("Mfx % of mean per 1 sd",round(mfx*100,2)))) #,report=('vc*p'),se=se
-
+The following figure dipicts the near perfect relationship between the last sold price and the current assesment value of the houses in the sample.
+```{r scattersoldpriceassesment}
+ggplot(rent_data[rent_data$last_sold_price<=2e6,], aes(x=last_sold_price, y=estimated_current_assesment)) + geom_point(shape=1)+geom_smooth(method=lm)+theme_bw(base_size = 14)+ xlab("Last Sold Price") + ylab("Estimated Assesment in 2016")+scale_x_continuous(labels = comma)+scale_y_continuous(labels = comma)
 ```
 
 
-The figure below shows the changes in house price index for California. We can see that from 2000 to 2006 and from 2012 to 2016 house prices increased by significantly higher rates (17% and 10% respectively) than allowed 2% increase under the proposition 13. This means that if a house is last sold later in these periods, those houses will receive significantly higher property tax bills compared to houses last sold earlier in the period. The opposite is true for the period from 2006 to 2012. During this periods houses last sold later in the period would receive a lower tax bill.
-
-## California HPI
-```{r cahpi}
-setwd(path)
-
-# source: All-Transactions House Price Index for California (CASTHPI) from https://fred.stlouisfed.org/series/CASTHPI
-ca_hpi <- read.csv(file="CASTHPI.csv")
-ca_hpi$DATE <- as.Date(as.character(ca_hpi$DATE))
-ca_hpi <- ca_hpi[ca_hpi$DATE>"1995-01-01",]
-ggplot(ca_hpi, aes(DATE, CASTHPI)) + geom_line()  + xlab("") + ylab("House Price Index")+ theme_bw(base_size = 14)
-```
-
-
-
-```{r sold_year_dummy}
-library(reshape2)
-formula_dummy <- as.formula("rent ~ factor(last_sold_year)+sqft + avg_school_rating + 
-    avg_school_distance +beds + baths + + Builtin+ zest_value+ factor(Pets)+factor(zip)")
-ols<- lm(formula_dummy, data=rent_data[rent_data$last_sold_year>=2000 ,])
-x = seq(2000,2015,1) #
-y = as.vector(ols$coefficients[2:17])
-plot_data <- as.data.frame(cbind(x,y))
-names(plot_data) <- c("year","coefficient")
-
-ca_hpi['year']<- as.numeric(format(ca_hpi$DATE,"%Y"))
-plot_data_hpi <- ddply(ca_hpi,.(year),summarise,hpi=mean(CASTHPI,na.rm = TRUE))
-plot_data_hpi <- plot_data_hpi[plot_data_hpi$year<=2015 & plot_data_hpi$year>=2000,]
-
-plot_data <- merge(plot_data,plot_data_hpi,by="year")
-rm(plot_data_hpi)
-# plot_data$year <- sapply(plot_data$year,function(x) as.Date(paste(x,"-01-01",sep = "")))
-# plot_data$year <- as.Date(plot_data$year,origin = "1970-01-01")
-
-plot_data$coefficient = (plot_data$coefficient-mean(plot_data$coefficient))/sd(plot_data$coefficient)
-plot_data$hpi = (plot_data$hpi-mean(plot_data$hpi))/sd(plot_data$hpi)
-
-plot_data <- melt(plot_data, id="year")
-
-y_min <- min(plot_data$value)*0.99
-y_max <- max(plot_data$value)
-
-ggplot(plot_data, aes(year, value,colour=plot_data$variable)) + geom_point()+ geom_line()+ theme_bw(base_size = 14)+ scale_color_manual(name="",values=c("gray20", "gray60"))+xlab("") +ylab("")+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.text.y=element_blank(),axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())
-
-cor(plot_data[plot_data$variable=="coefficient",]$value,plot_data[plot_data$variable=="hpi",]$value)
-```
-
+The following figure shows how the present value of future property tax given the current assesment value relative to the house vlaue is distributed. There is a large variation in the present value of tax relative to the house value. The mean is about 30%, but there is a sizable fraction of households that have a ratio less than 2% and and more than 50%. This shows how inherently unfair the property tax system to new buyers, but this is not the focus of this paper. 
 ```{r propertytax}
 setwd(path)
 
@@ -216,6 +121,125 @@ rent_data_2000['pv_prop_tax_pct'] <- rent_data_2000$pv_of_future_tax/rent_data_2
 ggplot(data=rent_data_2000, aes(pv_prop_tax_pct)) + geom_histogram(breaks=seq(0,0.6, by=0.05),col="black")+ylab("Number of Houses")+xlab("PV of Property Tax/House Value") + theme_bw(base_size = 14)
 ```
 
+
+
+<a href="#top">Back to top</a>
+
+# Motivation and Hypothesis
+
+Under the benefit-tax view, there would be no relationship between property tax and rent values within a community
+
+<a href="#top">Back to top</a>
+
+# Data
+From zillow.com. 3,030 rental listings in January 2017 in California from 192 zipcodes which had a population of more than 50,000 in 2010.
+
+## Summary Statistics
+```{r summarystats}
+stargazer(rent_data[, c("rent","last_sold_year","beds","baths","sqft","zest_value","avg_school_rating","avg_school_distance","Builtin","Lot")], type = output.type, summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),notes = "For rent houses in January 2017, in 192 zipcodes in California where population is larger than 50,000")
+```
+
+<a href="#top">Back to top</a>
+
+#Results
+
+For a given community(i.e. zipcode), I expect that the current assesment value to have no impact on the rental price after controlling for the characteristics such as square footage, number of bedrooms, number of bathrooms, estimated value of the house and age of the house. Zillow does not provide property tax details for the rental listings. As the first step I estimate the current assesment value using last sold price, last sold date and assuming 2% as annual appreciation rate of the assesment (In the future I can estimate the annual appreciation rate more accurately using the information on houses that were sold). i.e. $\text{current_assesment} = \text{last_sold_price}*(1.02)^{2017-\text{last_sold_year}}$. Then I etimate the following regression using the estimated current assesment.
+
+$$ rent = \alpha + \beta_1 \text{current assesment} + \gamma X + \epsilon $$
+
+The variable of interest is $\beta_1$ and if benefit-tax view is correct the value of $\beta_1$ should not be different from zero. These results are reported in the columns (1) and (2) in the table below. We can see that the estimate of $\beta_1$ is positive and highly statitically significant. Economically this implies that 1 standard deviation increase in the assesment increases the monthly rental by about 1.5% relative to the average rent. This is approximately \$500 per year.
+
+## Rent and Property Tax Assesment
+```{r basicreg}
+
+
+formula1 <- as.formula("rent ~ last_sold_year + sqft + beds+baths+zest_value+factor(zip)")
+formula1_1 <- as.formula("rent ~ last_sold_year + sqft + beds + baths+zest_value+factor(zip)+I(last_sold_year>=2012)")
+formula2 <- as.formula("rent ~ last_sold_year+sqft +beds + baths + Builtin+ zest_value+ avg_school_rating + avg_school_distance + factor(Pets)+factor(zip)")
+formula3 <- as.formula("rent ~ log(estimated_current_assesment)+sqft +beds + baths + zest_value+age+ factor(Pets)+  avg_school_rating + avg_school_distance +factor(zip)")
+formula4 <- as.formula("rent ~ log(estimated_current_assesment)+sqft +beds + baths + zest_value+factor(zip)")
+
+ols <- list()
+# ols[[1]] <- lm(formula1, data=rent_data)
+# ols[[2]] <- lm(formula2, data=rent_data)
+ols[[1]] <- lm(formula4, data=rent_data[is.finite(log(rent_data$last_sold_price)),])
+ols[[2]] <- lm(formula3, data=rent_data[is.finite(log(rent_data$last_sold_price)),])
+ols[[3]] <- lm(formula1_1, data=rent_data[(rent_data$last_sold_year<=2006 & rent_data$last_sold_year>=1995) |rent_data$last_sold_year>=2012 ,])
+ols[[4]] <- lm(formula1, data=rent_data[(rent_data$last_sold_year>=2006 & rent_data$last_sold_year<=2012),])
+
+se <- list()
+for(i in 1:3) {
+ se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
+}
+
+
+mfx <- NULL
+# mfx[1] <- ols[[1]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+# mfx[2] <- ols[[2]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[1] <- ols[[1]]$coefficients[2]*sd(log(rent_data[is.finite(log(rent_data$estimated_current_assesment)),]$estimated_current_assesment),na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[2] <- ols[[2]]$coefficients[2]*sd(log(rent_data[is.finite(log(rent_data$estimated_current_assesment)),]$estimated_current_assesment),na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[3] <- ols[[3]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+mfx[4] <- ols[[4]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
+
+
+stargazer(ols,omit = c("zip"),omit.labels = c("zip"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors",column.labels = c("All Years","All Years","Increasing Years","Decreasing Years","All Years"),add.lines = list(c("Mfx % of mean per 1 sd",round(mfx*100,2)))) #,report=('vc*p'),se=se
+
+```
+
+One potential alternative explanation of this positive relationship could be that house prices were generally increasing in the last 20 years and therefore more recently sold houses would be rented for higher rates since before or after the sale the condition of the house is likely to improve. In order to rule out this explanation I look at the period from 2005 to 2012 where the house prices were decreasing in California.
+
+The figure below shows the changes in house price index for California. We can see that from 2000 to 2006 and from 2012 to 2016 house prices increased by significantly higher rates (17% and 10% respectively) than allowed 2% increase under the proposition 13. This means that if a house is last sold later in these periods, those houses will receive significantly higher property tax bills compared to houses last sold earlier in the period. The opposite is true for the period from 2006 to 2012. During this periods houses last sold later in the period would receive a lower tax bill. I regress the rent on the last sold year for these two periods seperately and the results are reported in columns (3) and (4) in the table above. Column (3) restricts the sample to houses with last sold year between 2000 and 2005 and after 2012. Column (4) is based on the houses that were last sold between 2005 and 2012. We see a positive coefficient in column (3) and a negative coefficient in column (4). The negative coefficient is inconsistent with the explanation that the higher quality of houses that were more recently sold is driving the results as opposed to the property tax.
+
+## California HPI
+```{r cahpi}
+setwd(path)
+
+# source: All-Transactions House Price Index for California (CASTHPI) from https://fred.stlouisfed.org/series/CASTHPI
+ca_hpi <- read.csv(file="CASTHPI.csv")
+ca_hpi$DATE <- as.Date(as.character(ca_hpi$DATE))
+ca_hpi <- ca_hpi[ca_hpi$DATE>"1995-01-01",]
+ggplot(ca_hpi, aes(DATE, CASTHPI)) + geom_line()  + xlab("") + ylab("House Price Index")+ theme_bw(base_size = 14)
+```
+
+<a href="#top">Back to top</a>
+
+# Robustness
+I further examine the robustness of the previous results in this section.
+
+```{r sold_year_dummy, include=FALSE}
+library(reshape2)
+formula_dummy <- as.formula("rent ~ factor(last_sold_year)+sqft + avg_school_rating + 
+    avg_school_distance +beds + baths + + Builtin+ zest_value+ factor(Pets)+factor(zip)")
+ols<- lm(formula_dummy, data=rent_data[rent_data$last_sold_year>=2000 ,])
+x = seq(2000,2015,1) #
+y = as.vector(ols$coefficients[2:17])
+plot_data <- as.data.frame(cbind(x,y))
+names(plot_data) <- c("year","coefficient")
+
+ca_hpi['year']<- as.numeric(format(ca_hpi$DATE,"%Y"))
+plot_data_hpi <- ddply(ca_hpi,.(year),summarise,hpi=mean(CASTHPI,na.rm = TRUE))
+plot_data_hpi <- plot_data_hpi[plot_data_hpi$year<=2015 & plot_data_hpi$year>=2000,]
+
+plot_data <- merge(plot_data,plot_data_hpi,by="year")
+rm(plot_data_hpi)
+# plot_data$year <- sapply(plot_data$year,function(x) as.Date(paste(x,"-01-01",sep = "")))
+# plot_data$year <- as.Date(plot_data$year,origin = "1970-01-01")
+
+plot_data$coefficient = (plot_data$coefficient-mean(plot_data$coefficient))/sd(plot_data$coefficient)
+plot_data$hpi = (plot_data$hpi-mean(plot_data$hpi))/sd(plot_data$hpi)
+
+plot_data <- melt(plot_data, id="year")
+
+y_min <- min(plot_data$value)*0.99
+y_max <- max(plot_data$value)
+
+ggplot(plot_data, aes(year, value,colour=plot_data$variable)) + geom_point()+ geom_line()+ theme_bw(base_size = 14)+ scale_color_manual(name="",values=c("gray20", "gray60"))+xlab("") +ylab("")+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.text.y=element_blank(),axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())
+
+cor(plot_data[plot_data$variable=="coefficient",]$value,plot_data[plot_data$variable=="hpi",]$value)
+```
+
+## [Robustness 1]
+In the following analysis, I first run the hedonic rent regression excluding property tax and then I calculate the residual value of rent using this regression. In the second column I regress the residual on a 5th order polynomial of 2016 tax assesment and in the third column I regress the residual on a bunch of dummy variables representing each 5000 category of estimated tax assesment for 2016. The polynomial can explain 1% of the variation of residuals while the dummy variable model can explain 7% of the variation of residuals.
 ```{r proptaxreg}
 
 
@@ -248,7 +272,12 @@ ols[[3]] <- lm(formula3, data=rent_data_2000[rent_data_2000$prop_tax_2017<=10000
 # mfx[1] <- ols[[1]]$coefficients[2]*sd(rent_data_2000$pv_prop_tax_pct,na.rm = TRUE)/mean(rent_data_2000$rent,na.rm = TRUE)
 # # mfx[2] <- ols[[2]]$coefficients[2]*sd(rent_data$last_sold_year,na.rm = TRUE)/mean(rent_data$rent,na.rm = TRUE)
 
-stargazer(ols,omit = c("zip","prop_tax_2007_cat"),omit.labels = c("zip","prop tax 2007 cat"),type="text",no.space = TRUE,omit.stat = c("f","ser"),notes= "Robust Standard Errors",column.labels = c("All Years"))
+stargazer(ols,omit = c("zip","prop_tax_2007_cat"),omit.labels = c("zip","prop tax 2016 cat"),type=output.type,no.space = TRUE,omit.stat = c("f","ser"),notes= "Robust Standard Errors",column.labels = c("All Years"))
 ```
+
+## Evidence from Nevada
+[work in progress]
+
+<a href="#top">Back to top</a>
 
 # References
