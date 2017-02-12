@@ -89,6 +89,13 @@ sold_data <- sold_data[!duplicated(sold_data),]
 
 # Past Price Data ---------------------------------------------------------
 
+printi <-function(i)  {
+  temp <- as.character(sold_data[i,'price_history'])
+  temp <- strsplit(temp,"_n_l_")[[1]]
+  temp
+}
+
+
 listing_data <- NULL
 for(i in 1:nrow(sold_data)){
   cat(i," ")
@@ -101,9 +108,56 @@ for(i in 1:nrow(sold_data)){
     for(j in length(temp):1){
       if((tolower(substr(temp[j],10,13))=="sold") & (tolower(substr(temp[j],10,35)) != "sold: foreclosed to lender")) {
         for(k in (j-1):1){
+          # cat(k," ")
           if(tolower(substr(temp[k],10,13))=="sold") break
           if(tolower(substr(temp[k],10,24))=="listed for sale") {
-            listing_data <- rbind(listing_data,c(i,sold_data[i,'ZillowHomeID'],temp[j],temp[k]))
+            l=k-1
+            while(l >=1){
+              # cat(l," ")
+              if(tolower(substr(temp[l],10,13))=="sold") {
+                listingendinfo = temp[l]
+                cat(l," break 1")
+                break
+              }
+              if(tolower(substr(temp[l],10,24))=="listing removed") {
+                listingendinfo = temp[l] 
+                prev ="listing removed"
+                listingremoveddate = as.Date(substr(temp[l],1,8), "%m/%d/%y",origin="1970-01-01")
+                
+                foundend = FALSE
+                for(m in (l-1):1){
+                  if(tolower(substr(temp[m],10,13))=="sold") {
+                    solddate = as.Date(substr(temp[m],1,8), "%m/%d/%y",origin="1970-01-01")
+                    if((solddate-listingremoveddate)<100) listingendinfo = temp[l]
+                    else listingendinfo = temp[m]
+                    cat(l,m," break 2",listingendinfo,"\n")
+                    foundend = TRUE
+                    break
+                  }
+                  if((tolower(substr(temp[m],10,24))=="listed for sale") &(prev=="listing removed")){
+                    prev="listed for sale"
+                    listedforsaledate = as.Date(substr(temp[m],1,8), "%m/%d/%y",origin="1970-01-01")
+                    if((listedforsaledate-listingremoveddate)>200) {
+                      foundend = TRUE
+                      break
+                    }
+                    
+                  }
+                  if((tolower(substr(temp[m],10,24))=="listing removed") &(prev=="listed for sale")){
+                    prev="listing removed"
+                    listingremoveddate = as.Date(substr(temp[m],1,8), "%m/%d/%y",origin="1970-01-01")
+                    listingendinfo = temp[m]
+                    l=m
+                  }
+                }
+                if(foundend){
+                  cat(l," break 3",listingendinfo,"\n")
+                  break
+                }
+              }
+              l=l-1
+            }
+            listing_data <- rbind(listing_data,c(i,sold_data[i,'ZillowHomeID'],temp[j],temp[k],listingendinfo))
             break
           }
         }
@@ -112,7 +166,43 @@ for(i in 1:nrow(sold_data)){
   })
 }
 listing_data <- as.data.frame(listing_data)
+names(listing_data) <- c("row_no","ZillowHomeID","solddata","listingdata","listingenddata")
+listing_data <- data.frame(lapply(listing_data, as.character), stringsAsFactors=FALSE)
+listing_data['purchased_date'] <- sapply(listing_data$solddata,function(x) as.Date(substr(x,1,8), "%m/%d/%y",origin="1970-01-01"))
+listing_data['purchased_amount'] <- sapply(listing_data$solddata,function(x) substr(x,gregexpr("\\$",x)[[1]][1]+1,nchar(x)))
+listing_data['purchased_amount'] <- sapply(listing_data$purchased_amount,function(x) gsub(",", "", x))
+listing_data['purchased_amount'] <- sapply(listing_data$purchased_amount,function(x) as.numeric(substr(x,1,gregexpr("[^0-9]",x)[[1]][1]-1)))
 
+listing_data['listed_date'] <- sapply(listing_data$listingdata,function(x) as.Date(substr(x,1,8), "%m/%d/%y",origin="1970-01-01"))
+listing_data['listing_amount'] <- sapply(listing_data$listingdata,function(x) substr(x,gregexpr("\\$",x)[[1]][1]+1,nchar(x)))
+listing_data['listing_amount'] <- sapply(listing_data$listing_amount,function(x) gsub(",", "", x))
+listing_data['listing_amount'] <- sapply(listing_data$listing_amount,function(x) as.numeric(substr(x,1,gregexpr("[^0-9]",x)[[1]][1]-1)))
+
+listing_data['listing_end_date'] <- sapply(listing_data$listingenddata,function(x) as.Date(substr(x,1,8), "%m/%d/%y",origin="1970-01-01"))
+listing_data['listing_end_type'] <- ifelse(tolower(substr(listing_data$listingenddata,10,14))=="sold ","sale",
+                                           ifelse(tolower(substr(listing_data$listingenddata,10,14))=="sold:","forclosure","withdraw"))
+
+sold_data['row_no'] <- as.numeric(rownames(sold_data))
+
+listing_data <- merge(listing_data,sold_data,all.x = TRUE,by=c("row_no"))
+listing_data['listed_year'] <- year(as.Date(listing_data$listed_date,origin = "1970-01-01"))
+listing_data['purchased_year'] <- year(as.Date(listing_data$purchased_date,origin = "1970-01-01"))
+listing_data['age'] <- 2017 - listing_data$Builtin
+listing_data['remodeled_before_listing'] <- ifelse(listing_data$Lastremodelyear<=listing_data$listed_year & listing_data$Lastremodelyear >= listing_data$purchased_year,1,0)
+listing_data$remodeled_before_listing <- ifelse(is.na(listing_data$remodeled_before_listing),0,listing_data$remodeled_before_listing)
+listing_data['ownership_years'] <- listing_data$listed_year - listing_data$purchased_year
+listing_data['no_days_listed'] <- listing_data$listing_end_date - listing_data$listed_date
+listing_data <- listing_data[listing_data$ownership_years>=0 & listing_data$no_days_listed>0,]
+listing_data['failed_listing'] <- ifelse(listing_data$listing_end_type=="withdraw",1,0)
+listing_data['successful_listing'] <- ifelse(listing_data$listing_end_type=="sale",1,0)
+listing_data['purchased_quarter'] <- as.yearqtr(as.Date(listing_data$purchased_date,origin = "1970-01-01"))
+listing_data['listed_quarter'] <- as.yearqtr(as.Date(listing_data$listed_date,origin = "1970-01-01"))
+listing_data <- listing_data[listing_data$zest_value >= quantile(listing_data$zest_value,0.02,na.rm = TRUE) & listing_data$zest_value <= quantile(listing_data$zest_value,0.98,na.rm = TRUE),]
+listing_data['zip_listed_year'] <- paste(listing_data$zip,listing_data$listed_year,sep="")
+listing_data['zip_purchased_year'] <- paste(listing_data$zip,listing_data$purchased_year,sep="")
+
+# saveRDS(sold_data,file="sold_data_basic.rds")
+saveRDS(listing_data,file="listing_data.rds")
 # for(i in 1:nrow(sold_data))  {
 #   cat(i," ")
 #   tryCatch({
