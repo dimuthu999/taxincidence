@@ -36,6 +36,11 @@ library(zoo)
 library(AER)
 output.type="text"
 
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
 # source: All-Transactions House Price Index for California (CASTHPI) from https://fred.stlouisfed.org/series/CASTHPI
 ca_hpi <- read.csv(file="CASTHPI.csv")
 ca_hpi$DATE <- as.Date(as.character(ca_hpi$DATE))
@@ -52,7 +57,6 @@ listing_data['zip3']<- floor(listing_data$zip/100)
 listing_data <- merge(listing_data,fhfa_hpi[,c("purchased_quarter","zip3","hpi")],all.x = TRUE, by=c("purchased_quarter","zip3"))
 listing_data <- listing_data[listing_data$purchased_year>=1995,]
 
-
 ```
 
 # Summary Stats
@@ -68,9 +72,9 @@ ggplot(ca_hpi, aes(DATE, CASTHPI)) + geom_line()  + xlab("") + ylab("House Price
 # Listing Price Regression
 ```{r baseline}
 formulas<-list()
-formulas[[1]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+factor(purchased_year)")
-formulas[[2]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)+factor(purchased_year)")
-formulas[[3]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)+zest_value+factor(zip_purchased_year)+factor(zip)+ownership_years")
+formulas[[1]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+factor(purchased_year)+factor(listed_year)")
+formulas[[2]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)+factor(purchased_year)+factor(listed_year)")
+formulas[[3]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)+factor(purchased_year)+factor(listed_year)+zest_value")
 
 ols <- list()
 ols[[1]] <- lm(formulas[[1]],data = listing_data)
@@ -84,47 +88,72 @@ for(i in 1:length(ols)) {
  se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
 }
 
-stargazer(ols,omit = c("zip_listed_year","purchased_year","zip_purchased_year","zip"),omit.labels = c("zip * listed year","purchased year","zip purchased year","zip"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors",column.labels = c("All years","All years","2005-2012","2005-2012"),multicolumn = TRUE,se=se)
+stargazer(ols,omit = c("zip_listed_year","purchased_year","listed_year","zip"),omit.labels = c("zip * listed year","purchased year","listed year","zip"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors",column.labels = c("All years","All years","2005-2012","2005-2012","2005-2012"),multicolumn = TRUE,se=se)
 ```
 
 # Two stage
 ```{r twostage}
-formulas <- list()
-formulas[[1]] <- as.formula("purchased_amount~factor(hpicat)+beds+baths+sqft+factor(purchased_year)+avg_school_rating+Lot+age+ownership_years")
-formulas[[2]] <- as.formula("listing_amount~purchase_amt_hat+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+factor(remodeled_before_listing)+Lot+age+ownership_years+factor(purchased_year)")
-
-temp <- listing_data[!is.na(listing_data$hpi) & !is.na(listing_data$purchased_amount) & !is.na(listing_data$beds) & !is.na(listing_data$baths) & listing_data$purchased_year>=2000 & !is.na(listing_data$purchased_year) & !is.na(listing_data$sqft) & !is.na(listing_data$avg_school_rating) & !is.na(listing_data$age) & !is.na(listing_data$Lot),]
-temp['hpicat'] <- floor(temp$hpi/10)
-ols <- list()
-ols[[1]] <- lm(formulas[[1]],data = temp)
-temp['purchase_amt_hat'] <- predict(object = ols[[1]])
-ols[[2]] <- lm(formulas[[2]],data = temp)
-
-# se <- list()
-# for(i in 1:length(ols)) {
-#  se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
-# }
-
-stargazer(ols,omit = c("zip","zip_purchased_year","zip_listed_year","purchased_year","listed_year","hpicat"),type=output.type,no.space = TRUE,omit.stat = c("f","ser"),notes= "Robust Standard Errors",column.labels = c("First Stage"),multicolumn = TRUE)
-
+# formulas <- list()
+# formulas[[1]] <- as.formula("purchased_amount~hpi+I(hpi^2)+beds+baths+sqft+factor(zip_purchased_year)+avg_school_rating+Lot+age+ownership_years")
+# formulas[[2]] <- as.formula("listing_amount~purchase_amt_hat+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+factor(remodeled_before_listing)+Lot+age+ownership_years+factor(purchased_year)")
 # 
-# for (colname in names(temp)) {
-#   if (is.character(temp[[colname]])) {
-#     temp[[colname]] <- as.factor(temp[[colname]])
+# temp <- listing_data[!is.na(listing_data$hpi) & !is.na(listing_data$purchased_amount) & !is.na(listing_data$beds) & !is.na(listing_data$baths) & listing_data$purchased_year>=2000 & !is.na(listing_data$purchased_year) & !is.na(listing_data$sqft) & !is.na(listing_data$avg_school_rating) & !is.na(listing_data$age) & !is.na(listing_data$Lot),]
+# temp['hpicat'] <- floor(temp$hpi/10)
+# ols <- list()
+# ols[[1]] <- lm(formulas[[1]],data = temp)
+# temp['purchase_amt_hat'] <- predict(object = ols[[1]])
+# ols[[2]] <- lm(formulas[[2]],data = temp)
+# 
+# # se <- list()
+# # for(i in 1:length(ols)) {
+# #  se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
+# # }
+# 
+# stargazer(ols,omit = c("zip","zip_purchased_year","zip_listed_year","purchased_year","listed_year","hpicat"),type=output.type,no.space = TRUE,omit.stat = c("f","ser"),notes= "Robust Standard Errors",column.labels = c("First Stage"),multicolumn = TRUE)
+
+
+# for (colname in names(listing_data)) {
+#   if (is.character(listing_data[[colname]])) {
+#     listing_data[[colname]] <- as.factor(listing_data[[colname]])
 #   }
 # }
 ```
+
+# Two Stage
+```{r tsls}
+formulas <- list()
+formulas[[1]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+factor(purchased_year)")
+formulas[[2]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)+factor(purchased_year)|hpi+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)+factor(purchased_year)")
+formulas[[3]] <- as.formula("purchased_amount~hpi+beds+baths+sqft+factor(zip_purchased_year)+avg_school_rating+Lot+age")
+formulas[[4]] <- as.formula("listing_amount~purchased_amount+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+age+Lot+factor(purchased_year)")
+
+# temp <- completeFun(listing_data,c("listing_amount","hpi","purchased_amount","zip_listed_year","beds","baths","sqft","avg_school_rating","age","Lot","walk_score","remodeled_before_listing","purchased_year","listed_year"))
+
+temp <- listing_data[!is.na(listing_data$hpi) & !is.na(listing_data$purchased_amount) & !is.na(listing_data$beds) & !is.na(listing_data$baths) & listing_data$purchased_year>=2000 & !is.na(listing_data$purchased_year) & !is.na(listing_data$sqft) & !is.na(listing_data$avg_school_rating) & !is.na(listing_data$age) & !is.na(listing_data$Lot),]
+
+ols <- list()
+ols[[1]] <- lm(formulas[[1]],data = temp)
+ols[[2]] <- lm(formulas[[3]],data = temp)
+temp['purchased_amount'] <- predict(object = ols[[2]],na.action = 'na.exclude' )
+ols[[3]] <- lm(formulas[[4]],data = temp)
+
+
+stargazer(ols,omit = c("zip","zip_purchased_year","zip_listed_year","purchased_year","listed_year","hpicat"),type=output.type,no.space = TRUE,omit.stat = c("f","ser"),notes= "Robust Standard Errors",column.labels = c("OLS","First Stage","Two Stage"),multicolumn = TRUE)
+
+# stata: ivregress 2sls listing_amount i.zip_listed_year beds baths sqft avg_school_rating age Lot walk_score i.remodeled_before_listing i.zip_purchased_year (purchased_amount = hpi)
+# purchased_amount |   1.241692(Coef)   .0466703(SE)    26.61(z) 
+
+```
+
 # Listing Time
 ```{r listingtime}
 formulas<-list()
 formulas[[1]] <- as.formula("no_days_listed~log(purchased_amount)+factor(listed_year)+factor(zip)+log(zest_value)")
-formulas[[2]] <- as.formula("no_days_listed~log(purchased_amount)+factor(listed_year)+factor(zip)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)")
+formulas[[2]] <- as.formula("no_days_listed~log(purchased_amount)+factor(zip_listed_year)+factor(zip_purchased_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)")
 
 ols <- list()
-ols[[1]] <- lm(formulas[[1]],data = listing_data[listing_data$purchased_year>2005 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount)),])
-ols[[2]] <- lm(formulas[[1]],data = listing_data[listing_data$purchased_year>2005 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount))& listing_data$listing_end_type=="sale",])
-ols[[3]] <- lm(formulas[[2]],data = listing_data[listing_data$purchased_year>2005 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount)),])
-ols[[4]] <- lm(formulas[[2]],data = listing_data[listing_data$purchased_year>2005 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount))& listing_data$listing_end_type=="sale",])
+ols[[1]] <- lm(formulas[[2]],data = listing_data[listing_data$purchased_year>2000 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount)),])
+ols[[2]] <- lm(formulas[[2]],data = listing_data[listing_data$purchased_year>2000 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount))& listing_data$listing_end_type=="sale",])
 
 
 se <- list()
@@ -132,14 +161,14 @@ for(i in 1:length(ols)) {
  se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
 }
 
-stargazer(ols,omit = c("zip","listed_year"),omit.labels = c("zip","listed year"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors and purchase year in (2005,2012)",se=se,column.labels = c("All Listing","Sold Listing","All Listing","Sold Listing"),multicolumn = TRUE)
+stargazer(ols,omit = c("zip_listed_year","zip_purchased_year"),omit.labels = c("zip * listed year","zip * purchased year"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors and purchase year in (2005,2012)",se=se,column.labels = c("All Listing","Sold Listing","All Listing","Sold Listing"),multicolumn = TRUE)
 ```
 
 # Listing End Type
 ```{r listingend}
 formulas<-list()
-formulas[[1]] <- as.formula("failed_listing~log(purchased_amount)+ownership_years+factor(listed_year)+factor(zip)+log(zest_value)")
-formulas[[2]] <- as.formula("successful_listing~log(purchased_amount)+ownership_years+factor(listed_year)+factor(zip)+log(zest_value)")
+formulas[[1]] <- as.formula("failed_listing~log(purchased_amount)+ownership_years+factor(zip_listed_year)+factor(zip_purchased_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)")
+formulas[[2]] <- as.formula("successful_listing~log(purchased_amount)+ownership_years+factor(zip_listed_year)+factor(zip_purchased_year)+beds+baths+sqft+avg_school_rating+age+Lot+walk_score+factor(remodeled_before_listing)")
 
 ols <- list()
 ols[[1]] <- lm(formulas[[1]],data = listing_data[listing_data$purchased_year>2005 & listing_data$purchased_year<=2012 & is.finite(log(listing_data$purchased_amount)),])
@@ -151,6 +180,6 @@ for(i in 1:length(ols)) {
  se[[i]] <- sqrt(diag(vcovHC(ols[[i]], type = "HC1")))
 }
 
-stargazer(ols,omit = c("zip","listed_year"),omit.labels = c("zip","listed year"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors and purchase year in (2005,2012)",se=se,column.labels = c("Pr(failiure)","Pr(success)"),multicolumn = TRUE)
+stargazer(ols,omit = c("zip_listed_year","zip_purchased_year"),omit.labels = c("zip * listed year","zip * purchased year"),type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= "Robust Standard Errors and purchase year in (2005,2012)",se=se,column.labels = c("Pr(failiure)","Pr(success)"),multicolumn = TRUE)
 ```
 
