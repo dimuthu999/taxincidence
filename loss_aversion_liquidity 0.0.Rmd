@@ -1,0 +1,352 @@
+---
+title: "Sunk Costs in Housing Markets"
+output:
+  html_document:
+    css: bodycss.css
+    fig_height: 6
+    fig_width: 12
+    number_section: yes
+    toc: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+linestretch: 2
+bibliography: C:\Users\dnratnadiwakara\OneDrive\library.bib
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE,echo = FALSE)
+```
+
+# Introduction
+
+Kahneman and Tversky (1979) and Tversky and Kahneman (1991, 1992) proposes that loss aversion and anchoring impact the decision making process of individuals under uncertainity.  Loss aversion implies that people treat losses and gains asymmetrically in their value functions. i.e. an equal-sized loss looms larger than an equal-sized gain. Anchoring is when people draw utility over gains and losses relative to a reference value such as a prior acquisition price.
+
+In contrast to the theoretical papers in the area, the empirical literature is less evolved. Most of the available empirical studies are stylized experimental studies and  it is possible that these abstract away from some of the characteristics of practical negotiations particularly in the real estate market. Limited transactions-based empirical studies relating to real estate listing prices due to unavailability of data. Using a sample of listing of luxury condominiums in Boston in 1990s @Genesove2001 find that owners who expect losses from sale will set their list prices significantly higher.... @Bokhari2011 .....
+
+Both @Genesove2001 and @Bokhari2011 data are from illiquid markets. We hypothesize that effects of loss aversion and anchoring would be weaker in more liquid markets.
+```{r init}
+rm(list=ls())
+path = "E:/tax_incident/"
+setwd(path)
+library(plyr)
+library(psych)
+library(stargazer)
+library(Matching)
+library(sandwich)
+library(ggplot2)
+library(scales)
+library(lubridate)
+library(zoo)
+library(AER)
+library(lfe)
+library(dplyr)
+output.type="text"
+
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+# source: All-Transactions House Price Index for California (CASTHPI) from https://fred.stlouisfed.org/series/CASTHPI
+ca_hpi <- read.csv(file="CASTHPI.csv")
+ca_hpi$DATE <- as.Date(as.character(ca_hpi$DATE))
+ca_hpi <- ca_hpi[ca_hpi$DATE>"2000-01-01",]
+ca_hpi['purchased_quarter'] <- as.yearqtr(ca_hpi$DATE)
+
+fhfa_hpi <- read.csv(file="fhfa_hpi.csv")
+fhfa_hpi <- fhfa_hpi[,1:3]
+fhfa_hpi$date <- as.Date(as.character(fhfa_hpi$date))
+fhfa_hpi['purchased_quarter'] <- as.yearqtr(fhfa_hpi$date)
+fhfa_hpi['listed_quarter'] <- as.yearqtr(fhfa_hpi$date)
+fhfa_hpi['purchased_hpi'] <- fhfa_hpi$hpi
+fhfa_hpi['listed_hpi'] <- fhfa_hpi$hpi
+
+fhfa_hpi_detrend <- read.csv(file="fhfa_hpi.csv")[,1:3]
+fhfa_hpi_detrend$date <- as.Date(as.character(fhfa_hpi_detrend$date))
+detrend_hpi <- NULL
+zips <- unique(fhfa_hpi_detrend$zip3) 
+for(zip in zips)  {
+  temp <- fhfa_hpi_detrend[fhfa_hpi_detrend$zip3==zip,]
+  temp <- temp[order(temp$date),]
+  temp['detrend_listed_hpi'] <- detrend(temp$hpi,tt="linear")
+  temp['detrended_hpi_above_median'] <- ifelse(temp$detrend_listed_hpi>median(temp$detrend_listed_hpi,na.rm = TRUE),1,0)
+  temp['detrended_hpi_quartile'] <- ntile(temp$detrend_listed_hpi, 4) 
+  detrend_hpi <- rbind(detrend_hpi,temp)
+}
+detrend_hpi['listed_quarter'] <- as.yearqtr(detrend_hpi$date)
+detrend_hpi <- detrend_hpi[,c("listed_quarter","zip3","detrend_listed_hpi","detrended_hpi_above_median","detrended_hpi_quartile")]
+
+listing_data <- readRDS(file="listing_data4.rds")
+listing_data['zip3']<- floor(listing_data$zip/100)
+listing_data['listed_quarter']<-as.yearqtr(as.Date(listing_data$listed_date,origin = "1970-01-01"))
+listing_data['purchased_quarter'] <- as.yearqtr(as.Date(listing_data$purchased_date,origin = "1970-01-01"))
+listing_data <- merge(listing_data,fhfa_hpi[,c("purchased_quarter","zip3","purchased_hpi")],all.x = TRUE, by=c("purchased_quarter","zip3"))
+listing_data <- merge(listing_data,fhfa_hpi[,c("listed_quarter","zip3","listed_hpi")],all.x = TRUE, by=c("listed_quarter","zip3"))
+listing_data <- merge(listing_data,detrend_hpi,all.x = TRUE, by=c("listed_quarter","zip3"))
+listing_data <- listing_data[listing_data$purchased_year>=1995,]
+
+
+
+controls = "+factor(zip_listed_year)+beds+baths+sqft+avg_school_rating+ownership_years+age+listed_hpi+factor(remodeled_before_listing)+factor(purchased_year)"
+omit = c("zip_listed_year","purchased_year","zip_purchased_year")
+omit.labels = c("zip * listed year","purchased year","zip * purchased year")
+
+# for (colname in names(listing_data)) {
+#   if (is.character(listing_data[[colname]])) {
+#     listing_data[[colname]] <- as.factor(listing_data[[colname]])
+#   }
+# }
+
+# inventory data from http://files.zillowstatic.com/research/public/Zip/InventoryMeasure_Zip_Public.csv and transposed in excel
+inventory_data <- read.csv(paste(path,"InventoryMeasure_Zip_Public.csv",sep=""))
+inventory_data <- data.frame(inventory_data[1],stack(inventory_data[2:ncol(inventory_data)]))
+names(inventory_data) <- c("month","inventory","zip")
+inventory_data$month <- as.Date(as.character(inventory_data$month))
+inventory_data$zip <- as.character(inventory_data$zip)
+inventory_data$zip <- as.integer(substr(inventory_data$zip,2,nchar(inventory_data$zip)))
+inventory_data['listed_year'] <- as.numeric(format(inventory_data$month,"%Y"))
+# zips <- unique(inventory_data$zip)[! (unique(inventory_data$zip) %in% (unique(listing_data$zip)))]
+# save(zips,file="zips.rda")
+inventory_data <- inventory_data[inventory_data$zip %in% unique(listing_data$zip),]
+inventory_data <- ddply(inventory_data,.(listed_year,zip),summarise,inventory = mean(inventory,na.rm = TRUE))
+inventory_data['liquidity_above_median'] <- ifelse(inventory_data$inventory>median(inventory_data$inventory,na.rm = TRUE),1,0)
+inventory_data['inventory_quartile'] <- ntile(inventory_data$inventory, 4) 
+listing_data <- merge(listing_data,inventory_data,by=c("listed_year","zip"),all.x = TRUE)
+
+listing_data <- completeFun(listing_data,c("zip_listed_year","beds","baths","sqft","avg_school_rating","ownership_years","listed_hpi","remodeled_before_listing","purchased_year","listing_amount","purchased_amount","age","purchased_hpi"))
+
+listing_data2 <- listing_data[,c("listing_amount","purchased_amount","beds","baths","sqft","avg_school_rating","ownership_years","age","listed_hpi","remodeled_before_listing","zip_listed_year","purchased_year","purchased_hpi","inventory","zip_purchased_year","no_days_listed","listing_end_type","failed_listing","successful_listing","times_price_reduced","amount_price_reduced")]
+listing_data2 <- listing_data2[complete.cases(listing_data2),]
+listing_data2['log_purchased_amount'] <- log(listing_data2$purchased_amount)
+listing_data2 <- listing_data2[is.finite(listing_data2$log_purchased_amount),]
+
+listing_data3 <- listing_data[,c("listing_amount","purchased_amount","beds","baths","sqft","avg_school_rating","ownership_years","age","listed_hpi","remodeled_before_listing","zip_listed_year","purchased_year","purchased_hpi","inventory","zip_purchased_year","no_days_listed","listing_end_type","failed_listing","successful_listing","times_price_reduced","amount_price_reduced","sold_price")]
+listing_data3 <- listing_data3[complete.cases(listing_data3),]
+listing_data3['log_purchased_amount'] <- log(listing_data3$purchased_amount)
+
+felm_2stage <- "+beds+baths+sqft+avg_school_rating+age+listed_hpi+factor(remodeled_before_listing)+G(zip_listed_year)+G(purchased_year)"
+
+
+controls <- "beds+baths+sqft+avg_school_rating+age+listed_hpi+factor(remodeled_before_listing)|zip_listed_year+purchased_year"
+
+#"+beds+baths+sqft+avg_school_rating+ownership_years+age+listed_hpi+factor(remodeled_before_listing)+G(zip_listed_year)+G(zip_purchased_year)"
+
+listing_data <- listing_data[is.finite(log(listing_data$purchased_amount)),]
+
+clustervar = "zip_listed_year"
+
+note =c("Fixed Effects: zip*listed year, purchased year","Standard Errors clustered by zip * listed year")
+
+printtable <- function(reg,column.labels,depvar,note,iv) {
+  stargazer(reg,omit = omit,type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= note,column.labels = column.labels, dep.var.labels = "",dep.var.caption   = paste("Y: ",gsub("_"," ",depvar),"; iv: ",gsub("_"," ",iv)))
+}
+```
+
+# Listing Price Regression (OLS)
+
+$$ \text{listing price} = \beta \text{ purchase price} + controls$$
+
+```{r baseline}
+formulas<-list()
+formulas[[1]] <- as.formula(paste("listing_amount~purchased_amount",felm_2stage,sep = ""))
+
+
+ols <- list()
+ols[[1]] <- felm(formulas[[1]],data = listing_data,clustervar=clustervar)
+ols[[2]] <- felm(formulas[[1]],data = listing_data[listing_data$inventory<median(listing_data$inventory,na.rm = TRUE),],clustervar=clustervar)
+ols[[3]] <- felm(formulas[[1]],data = listing_data[listing_data$inventory>median(listing_data$inventory,na.rm = TRUE),],clustervar=clustervar)
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),"listing amount",note,"none")
+
+```
+
+# Listing Price Regression (IV=purchased hpi)
+```{r iv}
+y = "listing_amount"
+endo_var = "purchased_amount"
+iv = "purchased_hpi"
+
+formula <- as.formula(paste(y,"~",controls,"|(",endo_var,"~",iv,")|",clustervar,sep=""))
+
+
+ols <- list()
+ols[[1]] <- felm(formula,data =listing_data2 )
+ols[[2]] <- felm(formula,data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE),])
+ols[[3]] <- felm(formula,data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE),])
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),y,note,iv)
+
+condfstat(ols[[2]])
+```
+
+# Relevence of "purchased hpi"" as an IV
+
+
+## Graphs
+```{r}
+temp <- listing_data2
+
+adj_purchased_amount <- felm(purchased_amount~1|zip_purchased_year,data=temp)
+temp['pred_purchased_amount'] <- fitted.values(adj_purchased_amount)
+temp['resid_purchased_amount'] <- temp$purchased_amount - temp$pred_purchased_amount
+temp$purchased_hpi <- floor(temp$purchased_hpi/20)*20
+temp <- temp[temp$purchased_hpi>120,]
+
+temp_sum <- ddply(temp,.(purchased_hpi),summarise,p05=quantile(resid_purchased_amount,0.05,na.rm = TRUE),p50=quantile(resid_purchased_amount,0.5,na.rm = TRUE),p95=quantile(resid_purchased_amount,0.95,na.rm = TRUE),avg = mean(resid_purchased_amount,na.rm = TRUE))
+
+ggplot(temp_sum, aes(x=purchased_hpi, y=p50)) + geom_point(shape=1)+  geom_smooth(method=lm) + theme_bw()+ylab("FE adjusted median purchased amount") + xlab("HPI at the time of Purchase")+ labs(title = "Figure x")
+
+
+```
+
+
+## Conditional F statistics 
+Sanderson and Windmeijer (2015) 
+Null Hypothesis: Instrument is weak 
+
+```{r ftest}
+condfstat(ols[[1]])
+condfstat(ols[[2]])
+condfstat(ols[[3]])
+```
+## Impact on other control variables
+
+```{r othervariables}
+
+endo_var = "purchased_amount"
+iv = "purchased_hpi"
+
+y_vector <- c("beds","baths","sqft","age","listed_hpi","avg_school_rating")
+ols <- list()
+i = 1
+for(y in y_vector) {
+  formula <- as.formula(paste(y,"~1|zip_listed_year+purchased_year|(",endo_var,"~",iv,")|",clustervar,sep=""))
+  ols[[i]] <- felm(formula,data =listing_data2 )
+  i = i+1
+}
+
+printtable(ols,gsub("_"," ",y_vector)," ",note,iv)
+```
+
+# Listing Time
+$$ \text{number of days listed} = \beta log(\text{purchased amount}) + controls $$
+
+* Column(1): All listings; Column (2): Listings that ended with a sale.
+* Its not clear if the listing time should be more or less for all listings in column (1). If you list for a higher amount, you might not get a good response from the potential buyers and this may lead to early withdrawal of the listing. 
+* In column(2) we expect the number of days to be more if listed for a higher amount.
+
+```{r listingtime_allendtypes}
+
+y = "no_days_listed"
+endo_var = "log_purchased_amount"
+iv = "log(purchased_hpi)"
+
+formula <- as.formula(paste(y,"~",controls,"|(",endo_var,"~",iv,")|",clustervar,sep=""))
+
+
+ols <- list()
+ols[[1]] <- felm(formula,data =listing_data2)
+ols[[2]] <- felm(formula,data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE),])
+ols[[3]] <- felm(formula,data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE),])
+
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),y,note,iv)
+
+```
+
+```{r listingtime_sale}
+y = "no_days_listed"
+endo_var = "log_purchased_amount"
+iv = "log(purchased_hpi)"
+
+formula <- as.formula(paste(y,"~",controls,"|(",endo_var,"~",iv,")|",clustervar,sep=""))
+
+
+ols <- list()
+ols[[1]] <- felm(formula,data =listing_data2[listing_data2$listing_end_type=="sale",])
+ols[[2]] <- felm(formula,data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE) &  listing_data2$listing_end_type=="sale",])
+ols[[3]] <- felm(formula,data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE) & listing_data2$listing_end_type=="sale",])
+
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),y,note,iv)
+
+```
+
+```{r prob_failed}
+y = "failed_listing"
+endo_var = "log_purchased_amount"
+iv = "log(purchased_hpi)"
+
+formula <- as.formula(paste(y,"~",controls,"|(",endo_var,"~",iv,")|",clustervar,sep=""))
+
+
+ols <- list()
+ols[[1]] <- felm(formula,data =listing_data2)
+ols[[2]] <- felm(formula,data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE),])
+ols[[3]] <- felm(formula,data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE),])
+
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),y,note,iv)
+
+```
+
+```{r prob_success}
+y = "successful_listing"
+endo_var = "log_purchased_amount"
+iv = "log(purchased_hpi)"
+
+formula <- as.formula(paste(y,"~",controls,"|(",endo_var,"~",iv,")|",clustervar,sep=""))
+
+ols <- list()
+ols[[1]] <- felm(formula,data =listing_data2)
+ols[[2]] <- felm(formula,data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE),])
+ols[[3]] <- felm(formula,data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE),])
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),y,note,iv)
+```
+
+```{r price_reduction_count}
+formulas<-list()
+formulas[[1]] <- as.formula(paste("times_price_reduced~log_purchased_amount",felm_2stage,sep=""))
+formulas[[2]] <- as.formula(paste("amount_price_reduced~log_purchased_amount",felm_2stage,sep=""))
+
+ols <- list()
+ols[[1]] <- felm(formulas[[1]],data =listing_data2[listing_data2$listing_end_type=="sale",] ,clustervar=clustervar,iv=list(log_purchased_amount~log(purchased_hpi)) )
+ols[[2]] <- felm(formulas[[1]],data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE) & listing_data2$listing_end_type=="sale",],clustervar=clustervar,iv=list(log_purchased_amount~log(purchased_hpi)))
+ols[[3]] <- felm(formulas[[1]],data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE) & listing_data2$listing_end_type=="sale",],clustervar=clustervar,iv=list(log_purchased_amount~log(purchased_hpi)))
+
+
+stargazer(ols,omit = omit,type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= note,column.labels = c("All","Low Liquidity","High Liquidity"),multicolumn = TRUE)
+
+```
+
+```{r price_reductions_amount}
+ols <- list()
+ols[[1]] <- felm(formulas[[2]],data =listing_data2[listing_data2$listing_end_type=="sale",] ,clustervar=clustervar,iv=list(log_purchased_amount~log(purchased_hpi)) )
+ols[[2]] <- felm(formulas[[2]],data = listing_data2[listing_data2$inventory<median(listing_data2$inventory,na.rm = TRUE) & listing_data2$listing_end_type=="sale",],clustervar=clustervar,iv=list(log_purchased_amount~log(purchased_hpi)))
+ols[[3]] <- felm(formulas[[2]],data = listing_data2[listing_data2$inventory>median(listing_data2$inventory,na.rm = TRUE) & listing_data2$listing_end_type=="sale",],clustervar=clustervar,iv=list(log_purchased_amount~log(purchased_hpi)))
+
+
+stargazer(ols,omit = omit,type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= note,column.labels = c("All","Low Liquidity","High Liquidity"),multicolumn = TRUE)
+
+```
+
+```{r anchoring}
+y = "sold_price"
+endo_var = "purchased_amount"
+iv = "purchased_hpi"
+
+formula <- as.formula(paste(y,"~",controls,"|(",endo_var,"~",iv,")|",clustervar,sep=""))
+
+ols <- list()
+ols[[1]] <- felm(formula,data =listing_data3)
+ols[[2]] <- felm(formula,data = listing_data3[listing_data3$inventory<median(listing_data3$inventory,na.rm = TRUE),])
+ols[[3]] <- felm(formula,data = listing_data3[listing_data3$inventory>median(listing_data3$inventory,na.rm = TRUE),])
+
+printtable(ols,c("All","Low Liquidity","High Liquidity"),y,note,iv)
+
+condfstat(ols[[2]])
+```
+
