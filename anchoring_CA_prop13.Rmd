@@ -81,6 +81,7 @@ library(lfe)
 library(pracma)
 library(dplyr)
 library(ggmap)
+library(reshape2)
 
 output.type="text"
 
@@ -90,7 +91,7 @@ completeFun <- function(data, desiredCols) {
 }
 
 sold_data <- readRDS(file="ca_anchoring_4.rds")
-sold_data <- sold_data[sold_data$state %in% c("IL","CA"),]
+sold_data <- sold_data[sold_data$state %in% c("TN","CA"),]
 sold_data['tax_pct'] <- sold_data$proptax_2015/sold_data$current_value
 sold_data <- sold_data[sold_data$tax_pct>=quantile(sold_data$tax_pct,0.01,na.rm = TRUE) & sold_data$tax_pct<=quantile(sold_data$tax_pct,0.99,na.rm = TRUE),]
 sold_data <- sold_data[sold_data$sales_price>=quantile(sold_data$sales_price,0.01,na.rm = TRUE) & sold_data$sales_price<=quantile(sold_data$sales_price,0.99,na.rm = TRUE),]
@@ -107,6 +108,8 @@ sold_data <- completeFun(sold_data,c("sales_price","beds","baths","sqft","age","
 
 sales_price_estimate <- lm(sales_price~beds+baths+age+walk_score+Lot+avg_school_rating+avg_school_distance+listed_hpi+factor(zip_listed_year),data=sold_data)
 sold_data['estimated_value'] <- predict(sales_price_estimate)
+low_liq <- 1:5
+high_liq <- 6:10
 ```
 
 # California Proposition 13
@@ -136,13 +139,18 @@ temp <- sold_data[sold_data$state=="CA",]
 temp['purchased_year_cat'] <- ifelse(temp$purchased_year<=1998,"1995-1998",                                  ifelse(temp$purchased_year<=2002,"1999-2002",ifelse(temp$purchased_year<=2006,"2003-2006",ifelse(temp$purchased_year<=2010,"2007-2010","2011-2012"))))
 temp <- ddply(temp,.(purchased_year),summarise,proptax_2015 = mean(proptax_2015),current_value=mean(current_value),taxpct = proptax_2015*100/current_value,taxpct_2010 = mean(proptax_2015_2010*100/(current_value)),hpi=mean(purchased_hpi,na.rm=TRUE))
 # stargazer((temp),summary = FALSE,type=output.type)
-temp <- temp[,c("tax_pct","hpi")]
+# temp <- temp[,c("purchased_year","taxpct","hpi")]
+ggplot(temp,aes(x=purchased_year))+ geom_line(aes(y=temp$taxpct,color="Tax Rate"))+ geom_line(aes(y=temp$taxpct_2010,color="Tax Rate 2010"))+geom_line(aes(y=temp$hpi/200,color="House Price Index")) + scale_y_continuous(sec.axis = sec_axis(~.*200, name = "House Price Index"))+labs(y = "Tax Rate in 2015 (%)",x = "Purchased Year",colour = NULL)+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())+ggtitle("Panel A: California")
 
-# temp <- sold_data[sold_data$state=="IL",]
-# temp['purchased_year_cat'] <- ifelse(temp$purchased_year<=1998,"1995-1998",                                  ifelse(temp$purchased_year<=2002,"1999-2002",ifelse(temp$purchased_year<=2006,"2003-2006",ifelse(temp$purchased_year<=2010,"2007-2010","2011-2012"))))
-# temp <- ddply(temp,.(purchased_year),summarise,proptax_2015 = mean(proptax_2015),current_value=mean(current_value),taxpct = proptax_2015*100/current_value,taxpct_2010 = mean(proptax_2015_2010*100/(current_value)),hpi=mean(purchased_hpi,na.rm=TRUE))
+
+temp <- sold_data[sold_data$state=="TN",]
+temp['purchased_year_cat'] <- ifelse(temp$purchased_year<=1998,"1995-1998",                                  ifelse(temp$purchased_year<=2002,"1999-2002",ifelse(temp$purchased_year<=2006,"2003-2006",ifelse(temp$purchased_year<=2010,"2007-2010","2011-2012"))))
+temp <- ddply(temp,.(purchased_year),summarise,proptax_2015 = mean(proptax_2015),current_value=mean(current_value),taxpct = proptax_2015*100/current_value,taxpct_2010 = mean(proptax_2015_2010*100/(current_value)),hpi=mean(purchased_hpi,na.rm=TRUE))
 # stargazer((temp),summary = FALSE,type=output.type)
-# temp <- NULL
+temp <- temp[,c("purchased_year","taxpct","hpi")]
+ggplot(temp,aes(x=purchased_year))+ geom_line(aes(y=temp$taxpct,color="Tax Rate"))+geom_line(aes(y=temp$hpi/200,color="House Price Index")) + scale_y_continuous(sec.axis = sec_axis(~.*200, name = "House Price Index"))+labs(y = "Tax Rate in 2015 (%)",x = "Purchased Year",colour = NULL)+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())+ggtitle("Panel B: Tennessee")
+
+
 ```
 
 Nevada(?)
@@ -170,7 +178,7 @@ OLS estimates generate a relatively small user cost coefficient, indicating very
 R2 of first stage is low. This suggests that listing price is not fully rational. 
 
 ```{r main_result}
-
+temp <- sold_data[sold_data$state=="CA",]
 dependent_var = "log(sales_price)"
 endo_var = "log(listing_amount)"
 instrument = "tax_pct+log(purchased_amount)+purchased_hpi"
@@ -182,7 +190,7 @@ controls <- list()
 controls[[1]] <- "0|zip_listed_year+zip_purchased_year"
 controls[[2]] <- "log(current_value)|zip_listed_year+zip_purchased_year"
 controls[[3]] <- "log(estimated_value)|zip_listed_year+zip_purchased_year"
-controls[[4]] <- "listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age|zip_listed_year"
+controls[[4]] <- "listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age|zip_listed_year+zip_purchased_year"
 
 ols_formula <- as.formula(paste(dependent_var,"~",endo_var,"+",controls[[2]],"|0|",cluster_var,sep=""))
 fs_formula <- as.formula(paste(endo_var,"~tax_pct+log(purchased_amount)+purchased_hpi+",controls[[2]],"|0|",cluster_var,sep=""))
@@ -190,12 +198,12 @@ ss_formula <- as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",inst
 ss_formula2 <- as.formula(paste(dependent_var,"~",controls2,"|(",endo_var,"~",instrument,")|",cluster_var,sep=""))
 
 main_result <- list()
-main_result[[1]] <- felm(ols_formula,data =sold_data)
-main_result[[2]] <- felm(fs_formula,data =sold_data )
-main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = sold_data)
-main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = sold_data)
-main_result[[5]]  <- felm(as.formula(paste(dependent_var,"~",controls[[3]],"|(",endo_var,"~",instrument,")",sep="")),data = sold_data)
-main_result[[6]]  <- felm(as.formula(paste(dependent_var,"~",controls[[4]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = sold_data)
+main_result[[1]] <- felm(ols_formula,data =temp)
+main_result[[2]] <- felm(fs_formula,data =temp )
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[5]]  <- felm(as.formula(paste(dependent_var,"~",controls[[3]],"|(",endo_var,"~",instrument,")",sep="")),data = temp)
+main_result[[6]]  <- felm(as.formula(paste(dependent_var,"~",controls[[4]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
 
 stargazer(main_result,type=output.type,dep.var.labels.include = FALSE,column.labels = c("OLS","First Stage","IV","IV"),no.space = TRUE,omit.stat = c("f","rsq","ser"))
 
@@ -203,5 +211,30 @@ condfstat(main_result[[3]])
 condfstat(main_result[[4]])
 condfstat(main_result[[5]])
 condfstat(main_result[[6]])
+```
+
+# Liquidity Split
+```{r liquidity_split}
+temp <- sold_data[sold_data$state=="CA",]
+dependent_var = "log(sales_price)"
+endo_var = "log(listing_amount)"
+instrument = "tax_pct+log(purchased_amount)+purchased_hpi"
+cluster_var = "zip_purchased_year"
+
+controls <- list()
+controls[[1]] <- "0|zip_listed_year+zip_purchased_year"
+controls[[2]] <- "log(current_value)|zip_listed_year+zip_purchased_year"
+controls[[3]] <- "log(estimated_value)|zip_listed_year+zip_purchased_year"
+controls[[4]] <- "listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age|zip_listed_year+zip_purchased_year"
+
+main_result <- list()
+main_result[[1]]  <- felm(as.formula(paste(dependent_var,"~",controls[[4]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(1,2,3),])
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[4]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(8,9,10),])
+
+
+stargazer(main_result,type=output.type,dep.var.labels.include = FALSE,no.space = TRUE,omit.stat = c("f","rsq","ser"))
+
+condfstat(main_result[[1]])
+condfstat(main_result[[2]])
 ```
 
