@@ -8,7 +8,7 @@ trim <- function (x) gsub("^\\s+|\\s+$", "", x)
 r = 0.03
 
 
-sold_data <- list.files(path="E:/tax_incident/ca_anchoring",pattern = "*.csv",full.names = TRUE) #"^California.*.csv"
+sold_data <- list.files(path="E:/tax_incident/ca2",pattern = "*.csv",full.names = TRUE) #"^California.*.csv"
 sold_data <- lapply(sold_data,function(x) read.csv(x, stringsAsFactors = FALSE,header = FALSE))
 sold_data <- ldply(sold_data,data.frame)
 
@@ -34,15 +34,16 @@ sold_data$no_of_results <- NULL#as.numeric(gsub("[^0-9\\+\\-]", "", sold_data$no
 sold_data$walk_score <- as.numeric(gsub("[^0-9]", "", sold_data$walk_score))
 sold_data$transit_score <- as.numeric(gsub("[^0-9]", "", sold_data$transit_score))
 
+
 # temp <- nchar(as.character(sold_data$description_features))
 # temp <- as.character(sold_data$description_features)[which(temp==max(temp,na.rm = TRUE))]
 # temp <- strsplit(temp,"_n_l_")[[1]]
 
-items <- c("Lot:","HOA Fee:","Last sold:","Built in ","Zillow Home ID:","Last remodel year:")
+items <- c("Lot:","HOA Fee:","Last sold:","Built in ","Last remodel year:")
 itemnames <- gsub("[: ]","",items)
 
 for(i in 1:nrow(sold_data))  {
-  cat(i,"\n")
+  cat(i," ")
   j=1
   for(item in items)  {
     temp <- as.character(sold_data[i,'description_features'])
@@ -59,7 +60,7 @@ sold_data$Lot <- sapply(sold_data$Lot, function(x) as.numeric(gsub("[^0-9]", "",
 sold_data$Builtin <- sapply(sold_data$Builtin,function (x) as.numeric(gsub("[^0-9]", "", x)))
 #sold_data$Stories <- as.numeric(gsub("[^0-9]", "", sold_data$Stories))
 #sold_data$HOAFee <- as.numeric(gsub("[^0-9]", "", sold_data$HOAFee))
-sold_data$ZillowHomeID <- as.numeric(gsub("[^0-9]", "", sold_data$ZillowHomeID))
+
 sold_data$Lastremodelyear <- sapply(sold_data$Lastremodelyear,function (x) as.numeric(gsub("[^0-9]", "", x)))
 
 sold_data <- sold_data[!duplicated(sold_data$ZillowHomeID),]
@@ -79,11 +80,14 @@ for(i in 1:nrow(sold_data)){
   cat(i," ")
   tryCatch({
     temp <- as.character(sold_data[i,'price_history'])
+    temp1 <- temp[[1]]
     if(length(temp)==1) {
       temp[[1]] <- temp[[1]]
     } else {
       temp[[1]] <- temp[[2]]
     }
+    
+    if(is.na(temp[[1]])) temp[[1]] <- temp1
     
     if(is.na(temp)) next
     temp <- strsplit(temp,"_n_l_")[[1]]
@@ -243,25 +247,47 @@ sold_data['age'] <- sold_data$sale_year - sold_data$Builtin
 sold_data['zip_listed_year'] <- paste(sold_data$zip,sold_data$listed_year)
 sold_data['zip_purchased_year'] <- paste(sold_data$zip,sold_data$listed_year)
 sold_data <-sold_data[sold_data$purchased_year >1978 & sold_data$purchased_year<=2012,]
-sold_data <- sold_data[is.finite(log(sold_data$prop_tax_last3)) & is.finite(log(sold_data$prop_tax_last3_2010)),]
+# sold_data <- sold_data[is.finite(log(sold_data$prop_tax_last3)) & is.finite(log(sold_data$prop_tax_last3_2010)),]
 sold_data['ownership_years'] <- sold_data$sale_year - sold_data$purchased_year
 sold_data$proptax_2015 <- ifelse(sold_data$proptax_2015>0,sold_data$proptax_2015,ifelse(sold_data$proptax_2014>0,sold_data$proptax_2014,sold_data$proptax_2013))
-saveRDS(sold_data,file="ca_anchoring_4.rds")
+
+library(zipcode)
+data("zipcode")
+zipcode <- zipcode[,c("zip","state")]
+zipcode$zip <- as.numeric(zipcode$zip)
+sold_data <- merge(sold_data,zipcode,by="zip",all.x = TRUE)
+
+# sold_data <- readRDS(file="ca_anchoring_4.rds")
+inventory_data <- read.csv(paste("InventoryMeasure_Zip_Public.csv",sep=""))
+inventory_data <- data.frame(inventory_data[1],stack(inventory_data[2:ncol(inventory_data)]))
+names(inventory_data) <- c("month","inventory","zip")
+inventory_data$month <- as.Date(as.character(inventory_data$month))
+inventory_data$zip <- as.character(inventory_data$zip)
+inventory_data$zip <- as.integer(substr(inventory_data$zip,2,nchar(inventory_data$zip)))
+inventory_data['listed_year'] <- as.numeric(format(inventory_data$month,"%Y"))
+inventory_data <- inventory_data[inventory_data$zip %in% unique(sold_data[sold_data$state=="CA",]$zip),]
+inventory_data <- inventory_data[inventory_data$listed_year %in% unique(sold_data[sold_data$state=="CA",]$listed_year),]
+inventory_data <- ddply(inventory_data,.(listed_year,zip),summarise,inventory = mean(inventory,na.rm = TRUE))
+inventory_data['inventory_decile'] <- ntile(inventory_data$inventory, 10)
+sold_data <- merge(sold_data,inventory_data,by=c("listed_year","zip"),all.x = TRUE)
+
+
+saveRDS(sold_data,file="ca_anchoring_5.rds")
 
 # Temp Regs ---------------------------------------------------------------
-sold_data <- readRDS(file="ca_anchoring_2.rds")
-library(lfe)
-library(stargazer)
-dependent_var = "log(sales_price)"
-endo_var = "log(listing_amount)"
-instrument = "log(prop_tax_diff)"
-controls = "log(current_value)+log(age)+log(ownership_years)|zip_listed_year+zip_purchased_year"
-cluster_var = "zip_purchased_year"
-#"beds+baths+sqft+avg_school_rating+age+current_value+listed_hpi+purchased_hpi"
-fs_formula <- as.formula(paste(endo_var,"~",instrument,"+",controls,"|0|",cluster_var,sep=""))
-ss_formula <- as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep=""))
-first_stage <- felm(fs_formula,data =sold_data )
-second_stage <- felm(ss_formula,data = sold_data)
-
-stargazer(first_stage,second_stage,type="text",dep.var.labels.include = FALSE,column.labels = c("listing price","saled price"),no.space = TRUE) 
-condfstat(second_stage)
+# sold_data <- readRDS(file="ca_anchoring_2.rds")
+# library(lfe)
+# library(stargazer)
+# dependent_var = "log(sales_price)"
+# endo_var = "log(listing_amount)"
+# instrument = "log(prop_tax_diff)"
+# controls = "log(current_value)+log(age)+log(ownership_years)|zip_listed_year+zip_purchased_year"
+# cluster_var = "zip_purchased_year"
+# #"beds+baths+sqft+avg_school_rating+age+current_value+listed_hpi+purchased_hpi"
+# fs_formula <- as.formula(paste(endo_var,"~",instrument,"+",controls,"|0|",cluster_var,sep=""))
+# ss_formula <- as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep=""))
+# first_stage <- felm(fs_formula,data =sold_data )
+# second_stage <- felm(ss_formula,data = sold_data)
+# 
+# stargazer(first_stage,second_stage,type="text",dep.var.labels.include = FALSE,column.labels = c("listing price","saled price"),no.space = TRUE) 
+# condfstat(second_stage)
