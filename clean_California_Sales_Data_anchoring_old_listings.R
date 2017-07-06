@@ -107,18 +107,39 @@ for(i in 1:nrow(sold_data)){
           if(tolower(substr(temp[k],10,13))=="sold") break
           if(tolower(substr(temp[k],10,24))=="listed for sale") {
             listedinfo = temp[k]
+            
+            sold_date <- as.Date(substr(temp[j],1,8), "%m/%d/%y",origin="1970-01-01")
+            listing_removed <- NA
+            
+            for(m in k:j) {
+              if(tolower(substr(temp[m],10,24))=="listing removed") {
+                listing_removed <- as.Date(substr(temp[m],1,8), "%m/%d/%y",origin="1970-01-01")
+                listing_removed <- as.numeric(sold_date-listing_removed)
+              }
+            }
+            
+            if(listing_removed>100 & !is.na(listing_removed)) {
+              l=k
+              recordcomplete = TRUE
+              break
+            }
+            
             purchasedinfo <- NA
             l=k+1
             while(l <=length(temp)){
-              # cat(l," ")
+              cat(l," ")
               if(tolower(substr(temp[l],10,13))=="sold") {
                 purchasedinfo = temp[l]
                 break
               }
               l=l+1
             }
+            
 
-            listing_data[i,]<- c(i,sold_data[i,'link'],temp[j],listedinfo,purchasedinfo,"",1)
+            if(is.na(listing_removed) | (listing_removed<100)) {
+              # listing_data[i,]<- c(i,sold_data[i,'link'],temp[j],listedinfo,purchasedinfo,"",1)
+            }
+            
             recordcomplete = TRUE
           }
         }
@@ -127,43 +148,45 @@ for(i in 1:nrow(sold_data)){
     }
     
     
-    # j=l+1
-    # if(j<(length(temp)-2) & j>2){
-    #   tryCatch({
-    #     recordcomplete = FALSE
-    # 
-    #     for(j in j:length(temp)){
-    #       # cat(j)
-    #       if(j==length(temp)) break
-    #       if(recordcomplete) break
-    #       if((tolower(substr(temp[j],10,13))=="sold" | tolower(substr(temp[j],10,24))=="listing removed") & (tolower(substr(temp[j],10,35)) != "sold: foreclosed to lender")) {
-    #         for(k in (j+1):length(temp)){
-    #           if(recordcomplete) break
-    #           # cat(k," ")
-    #           if(tolower(substr(temp[k],10,13))=="sold") break
-    #           if(tolower(substr(temp[k],10,24))=="listed for sale") {
-    #             listedinfo = temp[k]
-    #             purchasedinfo <- NA
-    #             l=k+1
-    #             while(l <=length(temp)){
-    #               # cat(l," ")
-    #               if(tolower(substr(temp[l],10,13))=="sold") {
-    #                 purchasedinfo = temp[l]
-    #                 break
-    #               }
-    #               l=l+1
-    #             }
-    # 
-    #             listing_data <- rbind(listing_data,c(i,sold_data[i,'link'],temp[j],listedinfo,purchasedinfo,temp[j-1],2))
-    #             recordcomplete = TRUE
-    #           }
-    #         }
-    #         break
-    #       }
-    #     }
-    # 
-    #   })
-    # }
+    j=k
+    if(j<(length(temp)-2) & j>2){
+      tryCatch({
+        recordcomplete = FALSE
+
+        for(j in j:length(temp)){
+          # cat(j)
+          if(j==length(temp)) break
+          if(recordcomplete) break
+          if((tolower(substr(temp[j],10,13))=="sold" | tolower(substr(temp[j],10,24))=="listing removed") & (tolower(substr(temp[j],10,35)) != "sold: foreclosed to lender")) {
+            for(k in (j+1):length(temp)){
+              if(recordcomplete) break
+              # cat(k," ")
+              if(tolower(substr(temp[k],10,13))=="sold") break
+              if(tolower(substr(temp[k],10,24))=="listed for sale") {
+                listedinfo = temp[k]
+                purchasedinfo <- NA
+                l=k+1
+                while(l <=length(temp)){
+                  # cat(l," ")
+                  if(tolower(substr(temp[l],10,13))=="sold") {
+                    purchasedinfo = temp[l]
+                    break
+                  }
+                  l=l+1
+                }
+                
+
+                listing_data[i,] <- c(i,sold_data[i,'link'],temp[j],listedinfo,purchasedinfo,temp[j-1],2)
+                
+                recordcomplete = TRUE
+              }
+            }
+            break
+          }
+        }
+
+      })
+    }
     
   })
 }
@@ -200,7 +223,7 @@ listing_data$sale_date <- as.Date(listing_data$sale_date,origin = "1970-01-01")
 listing_data['sale_year'] <- year(listing_data$sale_date )
 # listing_data <- listing_data[listing_data$sale_year %in% c(2013,2014,2015,2016,2017) & listing_data$purchased_year<=2016,]
 listing_data <- listing_data[listing_data$listed_year > listing_data$purchased_year,]
-listing_data <- listing_data[listing_data$sale_year - listing_data$listed_year <=2,]
+listing_data <- listing_data[listing_data$sale_year - listing_data$listed_year <2,]
 
 # listing_data$ZillowHomeID <- as.numeric(listing_data$ZillowHomeID)
 # listing_data <- listing_data[!duplicated(listing_data$link),]
@@ -348,4 +371,4 @@ inventory_data['inventory_decile'] <- ntile(inventory_data$inventory, 10)
 sold_data <- merge(sold_data,inventory_data,by=c("listed_year","zip"),all.x = TRUE)
 
 
-saveRDS(sold_data,file="ca_anchoring_10.rds")
+saveRDS(sold_data,file="ca_anchoring_old_listings_1.rds")

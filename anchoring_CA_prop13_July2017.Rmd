@@ -1,0 +1,781 @@
+---
+title: 'Sunk Costs and Anchoring in the Housing Market'
+author: "Dimuthu Ratnadiwakara and Vijay Yerramilli"
+date: "July, 2017"
+output:
+  html_document:
+    css: bodycss.css
+    fig_width: 8
+    font-family: Helvetica,Arial,sans-serif;
+    number_section: yes
+    toc: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+linestretch: 2
+bibliography: C:\Users\dnratnadiwakara\OneDrive\library.bib
+---
+
+<style type="text/css">
+body{ 
+      font-size: 15px;
+      font-family: Helvetica,Arial,sans-serif;
+      line-height: 200%;
+  }
+  
+.author {
+ font-size: 15px;
+ color: Black;
+ font-style: normal;
+ text-align: center;
+}
+
+
+.date { 
+ font-size: 15px;
+ color: Black;
+ font-style: normal;
+ text-align: center;
+}
+
+.title{
+  text-align: center;
+  font-size: 15px;
+ color: Black;
+ 
+}
+
+.toc-ignore{
+  text-align: center;
+  font-size: 15px;
+ color: Black;
+}
+
+.fluid-row{
+  text-align: center;
+  font-size: 15px;
+ color: Black;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE,echo = FALSE, fig.align='center')
+```
+
+
+
+
+```{r init}
+
+rm(list=ls())
+path = "E:/tax_incident/"
+setwd(path)
+library(plyr)
+library(psych)
+library(stargazer)
+library(Matching)
+library(sandwich)
+library(ggplot2)
+library(scales)
+library(lubridate)
+library(zoo)
+library(AER)
+library(lfe)
+library(pracma)
+library(dplyr)
+library(ggmap)
+library(reshape2)
+library(np)
+library(survival)
+
+
+output.type="text"
+
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+# sold_data <- readRDS(file="ca_anchoring_10.rds")
+# sold_data['estimated_current_value'] <- sold_data$current_value
+# sold_data <- sold_data[sold_data$state %in% c("CA","IL"),]
+# 
+# 
+# other <- sold_data[!sold_data$state %in% c("CA"),]
+# sold_data <- sold_data[sold_data$state %in% c("CA"),]
+# 
+# 
+# sold_data <- sold_data[sold_data$sales_price>=quantile(sold_data$sales_price,0.001,na.rm = TRUE) & sold_data$sales_price<=quantile(sold_data$sales_price,0.999,na.rm = TRUE),]
+# sold_data['delete'] <- ifelse(sold_data$Lastremodelyear>sold_data$purchased_year,1,0)
+# sold_data <- sold_data[sold_data$delete ==0 | is.na(sold_data$delete),]
+# sold_data$delete <- NULL
+# 
+# sold_data <- sold_data[is.finite(log(sold_data$listing_amount)),]
+# sold_data <- sold_data[is.finite(log(sold_data$sales_price)),]
+# sold_data <- sold_data[!is.na(sold_data$zip_purchased_year),]
+# sold_data <- sold_data[!is.na(sold_data$zip_listed_year),]
+# 
+# 
+# other <- other[is.finite(log(other$listing_amount)),]
+# other <- other[is.finite(log(other$sales_price)),]
+# other <- other[!is.na(other$zip_purchased_year),]
+# other <- other[!is.na(other$zip_listed_year),]
+# 
+# zip_code_summary <- readRDS(file="zipcode_tax_summary.rds")
+# pb <- txtProgressBar(min = 1, max = nrow(sold_data), initial = 1,style=3,char = ".")
+# for(i in 1:nrow(sold_data)){
+#   setTxtProgressBar(pb, i)
+#   for(yr in c(2004:2015)) {
+#     tax <- eval(parse(text=paste("sold_data[i,]$proptax_",yr,"",sep="")))
+#     assesment <- eval(parse(text=paste("sold_data[i,]$assesment_",yr,"",sep="")))
+#     tryCatch({
+#       if(assesment>0 & (is.na(tax) | tax==0)) {
+#         
+#         eval(parse(text=paste("sold_data[i,]$proptax_",yr," = zip_code_summary[zip_code_summary$zip == sold_data[i,]$zip & zip_code_summary$year==yr,]$tax_rate",sep="")))
+#         
+#       }
+#     },error=function(err){})
+#   }
+# }
+# 
+# 
+# sold_data['listed_var'] <- sold_data$listed_year
+# sold_data$listed_var <- ifelse(sold_data$listed_var>2015,2015,sold_data$listed_var)
+# sold_data['listed_var'] <- sapply(sold_data$listed_var,function(x) paste("proptax_",x,sep=""))
+# 
+# for(i in 1:nrow(sold_data)){
+#   eval(parse(text=paste("sold_data[i,'listed_tax'] <- sold_data[i,'",sold_data[i,'listed_var'],"']",sep="")))
+# }
+# sold_data$listed_var <- NULL
+# 
+# 
+# sold_data <- completeFun(sold_data,c("sales_price","beds","baths","sqft","zip_listed_year","purchased_amount","purchased_hpi"))
+# other <- completeFun(other,c("sales_price","beds","baths","sqft","zip_listed_year","purchased_amount","purchased_hpi"))
+# 
+# purchased_price_estimate <- felm(purchased_amount~beds+baths+purchased_hpi|factor(zip_purchased_year),data=sold_data)
+# sold_data['purchase_price_residual'] <- purchased_price_estimate$residuals
+# 
+# #purchased_price_estimate <- lm(purchased_amount~beds+baths+purchased_hpi|factor(zip_purchased_year),data=other)
+# other['purchase_price_residual'] <- NA
+# 
+# 
+# sold_data['tax_pct'] <- sold_data$listed_tax/sold_data$estimated_current_value
+# sold_data <- sold_data[is.finite(log(sold_data$estimated_current_value)),]
+# sold_data <- sold_data[sold_data$tax_pct>=quantile(sold_data$tax_pct,0.001,na.rm = TRUE) & sold_data$tax_pct<=quantile(sold_data$tax_pct,0.999,na.rm = TRUE),]
+# 
+# 
+# other['tax_pct'] <- other$listed_tax/other$estimated_current_value
+# other <- other[is.finite(log(other$estimated_current_value)),]
+# other <- other[other$tax_pct>=quantile(other$tax_pct,0.01,na.rm = TRUE) & other$tax_pct<=quantile(other$tax_pct,0.99,na.rm = TRUE),]
+# 
+# 
+# sold_data['degree_of_overpricing'] <- (sold_data$listing_amount / sold_data$estimated_current_value)
+# sold_data['loss'] <- sold_data$purchased_amount-sold_data$estimated_current_value
+# 
+# sold_data <- sold_data[sold_data$degree_of_overpricing>=quantile(sold_data$degree_of_overpricing,0.001,na.rm = TRUE) & sold_data$degree_of_overpricing<=quantile(sold_data$degree_of_overpricing,0.999,na.rm = TRUE),]
+# 
+# other['degree_of_overpricing'] <- (other$listing_amount / other$estimated_current_value)
+# other['loss'] <- other$purchased_amount-other$estimated_current_value
+# 
+# 
+# sold_data <- rbind(sold_data,other)
+# sold_data['log_loss'] <- ifelse(sold_data$loss<=0,0,log(sold_data$loss))
+# sold_data['time_on_market'] <- as.numeric(sold_data$sale_date-sold_data$listed_date)
+# low_liq <- 1:5
+# high_liq <- 6:10
+# sold_data$zip_purchased_year <- paste(sold_data$zip,sold_data$purchased_year)
+# 
+# 
+# 
+note =c("Fixed Effects: zip x listed year","Standard Errors clustered by zip x listed year")
+printtable <- function(reg,column.labels,depvar,note,iv,lines) {
+  stargazer(reg,type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= note,column.labels = column.labels, dep.var.labels = "",dep.var.caption   = paste("Y: ",gsub("_"," ",depvar),"; iv: ",gsub("_"," ",iv)),dep.var.labels.include = FALSE,add.lines = lines)
+}
+
+# saveRDS(sold_data,file = "sold_data_cleaned_10.rds")
+
+sold_data <- readRDS(file = "sold_data_cleaned_10.rds")
+
+# sold_data <- readRDS(file="ca_anchoring_10.rds")
+# temp <- sold_data[sold_data$state %in% c("CA") & sold_data$purchased_year>1978,]
+# 
+# summarydata <- matrix(nrow = nrow(sold_data)*5, ncol = 4)
+# 
+# 
+# rowno <- 1
+# pb <- txtProgressBar(min = 1, max = nrow(temp), initial = 1,style=3,char = ".")
+# for(i in 1:nrow(temp)) {
+#     setTxtProgressBar(pb, i)
+#     start = temp[i,]$purchased_year+2
+#     end = temp[i,]$listed_year-1
+#     if(end>start) {
+#       for(j in start:(end-1)) {
+#         appr <- eval(parse(text=paste("temp[i,]$assesment_",j,"/temp[i,]$assesment_",(j-1),"-1",sep="")))
+#         tax_rate <- eval(parse(text=paste("temp[i,]$proptax_",j,"/temp[i,]$assesment_",j,sep="")))
+#         if(length(appr)==0 | length(tax_rate)==0) next
+#         if(is.na(appr) | is.na(tax_rate)) next
+#         if(appr>0.022 | tax_rate>0.011 | tax_rate<=0 ) next
+#         # appr <- min(0.02,appr)
+#         # tax_rate <- min(0.01,tax_rate)
+#         summarydata[rowno,] <- c(temp[i,]$zip,j,appr,tax_rate)
+#         rowno = rowno+1
+#       }
+#     }
+# 
+# }
+# summarydata <- as.data.frame(summarydata)
+# names(summarydata) <- c("zip","year","assesment_appreciation","tax_rate")
+# summarydata <- summarydata[!is.na(summarydata$zip),]
+# 
+# summarydata <- ddply(summarydata,.(zip,year),summarise,assesment_appreciation = median(assesment_appreciation,na.rm = TRUE),tax_rate = median(tax_rate,na.rm = TRUE))
+# 
+# saveRDS(summarydata,file="zipcode_tax_summary.rds")
+
+```
+# Research Questions
+
+* Do home sellers list prices higher when the sunk costs are greater?
+* Are sellers faced with prospective losses more sensitive to sunk cost?
+* Do buyers use initial list price in home sales as an anchor to judge the value of a property?
+
+# Related Literature
+
+* According to traditional microeconomic theory, sunk costs should not influence the seller's listing price. However, evidence from behavioral economics (Knox and Inkster (1968), Staw and Fox (1976),Arkes and Blumer (1985), Whyte (1986)) suggest that sunk costs do, in fact, influence people's decisions because humans are prone to loss aversion and framing effects ((Kahneman and Tverksy 1979, Tversky and Kahneman 1991)
+* According Tversky and Kahneman (1986), a reason people fall prey to the sunk cost fallacy is loss aversion: People tend to have a much stronger preference for avoiding losses than for acquiring gains. To explain loss aversion with prospect theory, Tversky and Kahneman (1991) suggest that there are three essential components that help explain how individuals make choices under uncertainity. First gains and losses are examined relative toa reference point. Second, the value function is steeper for losses than for equivalently sized gaints. Third, the marginal value of gains or losses diminishes with the size of the gain or loss.
+* The psychological litrature on the "anchorin-and-adjustment" heuristic suggests that (a) an arbitrarily chosen reference point (anchor) will significantly infuence value estimates, and (b) value estimates will be insufficiently adjusted away from the reference point toward the true value of the object estimation (Slovic & Lichtenstein, 1971). Tversky and Kahneman (1974) first demonstrated this effect using a behavioral experiment. 
+* Genesove and Mayer (2001) find strong evidence of loss aversion in the context of the Boston condominium market between 1990 and 1997. Anenberg (2011) analyses the San Francisco Bay Area housing market and reports significant effects of loss aversion on transaction prices (i.e. anchoring). Bokhari and Geltner (2011) concludes that loss aversion behavior plays a major role in the pricing of corporate properties. They also document a possible anchoring effect. 
+* Northcraft and Neale (1987) show using an experimental study that over-or underpricing by a seller could influence a buyer's valuation and thus have an effect on the subsequent transaction price. Black and Diaz (1996) found in a laboratory experiment that manipulation of the asking price influenced the buyer's opening offer and eventual transaction price. 
+* Bracke and Tenreyro (2017) show that sale prices and selling probabilities today are affected by aggregate house prices prevailing in the period in which properties were previously bought. 
+* Choi, Hong and Scheinkman (2014) show that likelihood of home improvements and renovations is correlated with aggregate house prices. => Bracke and Tenreyro (2017) estimates could still be biased despite them using house price index as an instrument
+* Stein (1995) - down-payment effect. For repeat buyers, a large percentage of their downpayment comes from the sale of their previous homes. Therefore owners who bought at high prices will have limited home equity and will have higher reservation prices.
+* Genesove and Mayer (1997) show that owners with high loan-to-value (i.e. low equity) take longer to sell their properties than owners with low loan-to-value rations. Properties with high loan-to-value ratios are listed at higher asking prices; when sold, they receive higher prices than units with less debt.
+* Yavas and Yang (1995) propose a game theoretic model in which they argue that a seller strategically lists an asking price that reflects his or her bargaining power in an attempt to signal to certain types of buyers.
+* Glower, Haurin and Hendershott (1998) find that a seller who has a planned date to move will over-rice less and sell more quickly than a seller with no definite move date. A seller who is willing to move later will over-price more and sell more slowly than a seller who wants to move sooner.
+* Springer (1996) show selling price discounts for houses with sellers who are motivated, anxious, who have relocated, foreclosures and vacant houses. 
+* Levitt and Syversion (2008) - Real estate agents have an incentive to convince clients to sell their houses too cheaply and too quickly.
+* Knight (2002) - Homes whose list prices were revised took longer to sell and sold for less than homes that were initially priced "correctly"
+
+
+
+# Data 
+
+* Primary data source is Zillow.com. 
+* Listing data for a sample of recently sold homes in California.
+* Data includes house characteristics, neighborhood characteristics, price history and tax history. House characteristics include information such as number of bedrooms, bathrooms, square footage, lot size and age. Neihgborhood characteristics include school ratings from greatschools blog, distance to school, walkability to the closest amenities and availability of public transportation. Price history includes purchased price, purchased date, listed for sale date, listed price, price changes, whether listing was removed without a sale, or sales price and date if the transaction is succesful. Tax data gives the assesment value and tax amount each year from year 2004. 
+
+## Key Variables
+
+<b>House Value:</b> $$ HouseValue_l = PurchasedPrice_p * HPI_l/HPI_p$$ where l=listing month and p = purchased month. HPI is the zip code level median house value. <br/>
+
+<b>Tax Rate:</b> $$ TaxRate_l = TaxAmount_{l-1}/HouseValue_l $$<br/>
+
+<b>Degree of overpricing:</b>  $$ \frac{listprice}{HouseValue_l} $$<br/>
+
+<b>Time on Market:</b> $$SoldDate - ListDate$$<br/>
+
+<b>Succesful Listing:</b> Whether listing resulted in a sale <br/>
+
+
+## Descriptive Statistics
+
+This table provides descriptive statistics of the main sample-a sample of recently sold houses in California.
+```{r descriptivestats}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE),]
+stargazer(temp[, c("degree_of_overpricing","tax_pct","listing_amount","listed_year","current_value","sales_price","beds","baths","sqft","avg_school_rating","avg_school_distance","age","Lot","Lastremodelyear","purchased_amount","purchased_year","ownership_years")], type = output.type, summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),notes = "")
+```
+
+
+# Identification Strategy
+
+* The exogenous property tax component due to Proposition 13 in California is used as an instrument to solve the main identification problem - the correlation between price and unobserved housing, seller and agent characteristics.
+
+## California Proposition 13
+Proposition 13, which is officially called the People's Initiative to Limit Property Taxation, was enacted in 1978 and it limits the maximum amount of tax on real property to be 1% and annual increase in the assesment value to 2%. A reassesment of the property is allowed only following an ownership change or new construction[@Oakland1979]. This leads to a situation where two similar houses in the same community whose residents have access to the same bundle of local public services paying significantly different tax amounts. The residents in the house that was purchased when the house prices are higher gets a larger tax bill compared to the residents in a similar house in the same community which was purchased way back when the house prices were low. According to the California Constitution, Article XIIIa, Proposition 13 states that “the maximum amount of any ad valorem tax on real property shall not exceed one percent (1%) of the full cash value of such property”. Full cash value means price at the time of purchase plus a maximum inflation adjustment of 2% per year. No re- assessment could be carried out, implying that property taxes are effectively frozen (apart from the 2% per year rise). Also, the initial base values used to set property taxes were the assessed housing values of 1975/1976
+
+
+Table
+Following example of two very similar houses in Anaheim California which were sold recently shows how past purchases impact the property taxes. Both these houses were sold for similar amounts in 2014. Both houses have 3 bedrooms and 2 bath rooms and both were built in 1955. Observable characteristics of these two houses are as follows.
+
+|620 S Hacienda St|640 S Hacienda St|
+|---------------|---------------|
+|3 beds, 2 baths|3 beds, 2 baths|
+|1,336 sqft|1,314 sqft|
+|Built in 1955|Built in 1955|
+|Previouse Sales 2005 (\$482,000), 2010 (320,000)|None|
+|Sales Price \$ 450,000 (2014)|Sales Price \$ 435,000 (2014)|
+
+![Figure 1: Two recently sold houses in Anaheim, CA](C:/Users/dnratnadiwakara/OneDrive/taxincidence/map2.png)
+
+Following figure shows the annual property taxes for two very similar houses in Anaheim California. Both houses were sold in 2014 for similar amounts. House 1(620 S Hacienda St) was sold twice in the past during the sample period in 2005 for \$482,000 and in 2010 for \$435,000. House 2 (640 S Hacienda St) was sold for the first time in 2014.
+
+```{r example}
+years <- 2005:2016
+house1 <- c(3479,5429,5429,5625,3815,3815,3815,3867,3867,3928,5550,5550)
+house2 <- c(679,679,714,737,776,914,914,982,982,974,5288,5288)
+temp <- rbind(years,house1)
+temp <- as.data.frame(t(rbind(temp,house2)))
+ggplot(temp,aes(x=years))+ geom_line(aes(y=temp$house1,color="620 S Hacienda St"))+ geom_line(aes(y=temp$house2,color="640 S Hacienda St"))+labs(y = "Properyt Taxes ($)",x = "Tax Year",colour = NULL)+ theme_bw()+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())+scale_x_continuous(breaks=years) 
+
+```
+
+## Property Taxes and House Prices in California
+
+This figure shows the relationship between the property tax rate in 2015 and the median house price in the zip code at the time of purchase in California. Tax rate is defined as the property taxes paid in 2015 as a percentage of estimated home value in 2015. Home value is estimated by inflating the purchased price by house price appreciation rate from purchased year to year 2015.
+
+```{r ca_graph}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp <- temp[temp$tax_pct>=quantile(temp$tax_pct,0.05,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.95,na.rm = TRUE),]
+temp['purchased_quarter'] <- as.yearqtr(temp$purchased_date)
+temp <- ddply(temp,.(purchased_quarter),summarise,proptax_2015 = mean(proptax_2015),estimated_current_value=mean(estimated_current_value),taxpct = proptax_2015*100/estimated_current_value,hpi=mean(purchased_hpi,na.rm=TRUE))
+# stargazer((temp),summary = FALSE,type=output.type)
+# temp <- temp[,c("purchased_year","taxpct","hpi")]
+g1 <- ggplot(temp,aes(x=purchased_quarter))+ geom_line(aes(y=temp$taxpct,color="Tax Rate in 2015"))+ geom_line(aes(y=temp$hpi/500000,color="Median House Price")) + scale_y_continuous(sec.axis = sec_axis(~.*500, name = "Median House Price $'000"))+labs(y = "Tax Rate in 2015 (%)",x = "Purchased Year",colour = NULL)+ theme_bw()+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())+ggtitle("")
+g1
+```
+
+
+
+Following figure shows the histogram of within zip code tax rate variation. Tax rate for each house is calculated by dividing the property tax amount in the year prior to listing by the estimated house value in the year of listing. X-axis is the difference between the tax rate of each house and the mean tax rate of each zip code.
+
+```{r hist_tax_pct}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$tax_pct<0.02 & temp$tax_pct>0.002,]
+temp$tax_pct = temp$tax_pct*100
+zip_tax_rate <- ddply(temp,.(zip),summarise,mean_tax_rate = mean(tax_pct))
+temp <- merge(temp,zip_tax_rate,by=c("zip"))
+temp['tax_variation'] <- temp$tax_pct-temp$mean_tax_rate
+q1<-qplot(temp$tax_variation,geom="histogram",xlab="Tax Rate - Mean ZIP Tax Rate, (%)",ylab="Number of Listings",col=I("black"))+ theme_bw()+xlim(-0.75,0.75)
+q1
+```
+
+
+This table examines the relationship between tax rate and the value of the property. Tax rate is defined as the property tax immidiately after purchase as a fraction of the purchased price.  Column (1) regresses the log(Purchased Price) on tax rate, Column (2) regresses Purchased Price/Sqft on tax rate and Column (3) regresses the residual of a hedonic purchase price regression based on observable house characteristics on tax rate. 
+
+```{r tax_pct_relation}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$tax_pct<0.03 & temp$tax_pct>0.0002,]
+temp$tax_pct = temp$tax_pct*100
+temp <- temp[temp$purchased_year>2004 & temp$purchased_year<2015,]
+temp <- temp[abs(temp$purchase_price_residual)<150000,]
+
+for(i in 1:nrow(temp)) {
+  tryCatch({
+    temp[i,'tax_rate'] <- eval(parse(text=paste("temp[i,'proptax_",(temp[i,'purchased_year']+1),"']/temp[i,'purchased_amount']",sep="")))
+  },error=function(err){})  
+}
+
+temp$zip_purchased_month <- paste(temp$zip,temp$purchased_month)
+# temp <- temp[temp$zip %in% unique(zip_year_q$zip) & temp$purchased_year %in% unique(zip_year_q$purchased_year),]
+
+main_result <- list()
+main_result[[1]]  <- felm(log(purchased_amount)~tax_rate|zip_purchased_month|0|zip_purchased_month,data = temp)
+main_result[[2]]  <- felm(I(purchased_amount/sqft)~tax_rate|zip_purchased_month|0|zip_purchased_month,data = temp)
+main_result[[3]]  <- felm(purchase_price_residual~tax_rate|zip_purchased_month|0|zip_purchased_month,data = temp)
+
+printtable(main_result,c("log(Purchased Price)","Purchased Price/Sqft","Purchase Price Resid."),depvar = "",note = c("Fixed Effects: zip x purchased month","Standard Errors clustered by zip x purchased month"),iv="None","")
+```
+
+
+# Results
+
+## Sunk Cost
+
+This table expamines the relationship between nominal property taxes paid by the home seller in the past and the listing premium. Nominal property taxes is the sum of property taxes paid by seller from the time of purchase to the time of listing. Listing premium is deinded as the List Price - House Value. House value is estimated as $$ PurchasePrice*\frac{HPI_L}{HPI_P} $$. 
+```{r first_stage_amount_1}
+
+temp <- sold_data[sold_data$state %in% c("CA")  ,]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.02,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.98,na.rm = TRUE),]
+# 
+# listing_price_resid <- lm(listing_amount~estimated_current_value+factor(zip_listed_year),data=temp)
+# temp['pred_listed_amount'] <- predict(listing_price_resid)
+temp['degree_of_overpricing'] <- temp$listing_amount - temp$estimated_current_value
+
+dependent_var = "degree_of_overpricing"
+endo_var = "log(listing_amount)"
+instrument = "I(listed_tax*ownership_years)"
+cluster_var = "0"
+
+controls <- list()
+controls[[1]] <- "log(estimated_current_value)+beds+baths+sqft+Lot+age|ownership_years+zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+purchase_price_residual+Lot+baths+beds+age|ownership_years+zip_listed_year"
+
+main_result <- list()
+main_result[[1]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[1]],"|0|",cluster_var,sep="")),data = temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[1]],"|0|",cluster_var,sep="")),data = temp[temp$listed_hpi<temp$purchased_hpi,])
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[1]],"|0|",cluster_var,sep="")),data = temp[temp$listed_hpi>temp$purchased_hpi,])
+# main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[3]],"|0|",cluster_var,sep="")),data = temp)
+
+printtable(main_result,c("All Listings","List HPI < Purchase HPI","List HPI> Purchase HPI"),depvar = "List Price - House Value",note = c("Fixed Effects: zip x listed year, Ownership years","Standard Errors clustered by zip x listed year"),iv="None","")
+```
+
+This table expamines the relationship between nominal property taxes paid by the home seller in the past and the listing premium. Nominal property taxes is the sum of property taxes paid by seller from the time of purchase to the time of listing. Listing premium is deinded as the List Price - actual sales price.
+```{r first_stage_amount_2}
+
+temp <- sold_data[sold_data$state %in% c("CA")  ,]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.02,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.98,na.rm = TRUE),]
+# 
+# listing_price_resid <- lm(listing_amount~estimated_current_value+factor(zip_listed_year),data=temp)
+# temp['pred_listed_amount'] <- predict(listing_price_resid)
+temp['degree_of_overpricing'] <- temp$listing_amount - temp$sales_price
+
+dependent_var = "degree_of_overpricing"
+endo_var = "log(listing_amount)"
+instrument = "I(listed_tax*ownership_years)"
+cluster_var = "0"
+
+controls <- list()
+controls[[1]] <- "log(estimated_current_value)+beds+baths+sqft+Lot+age|ownership_years+zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+purchase_price_residual+Lot+baths+beds+age|ownership_years+zip_listed_year"
+
+main_result <- list()
+main_result[[1]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[1]],"|0|",cluster_var,sep="")),data = temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[1]],"|0|",cluster_var,sep="")),data = temp[temp$listed_hpi<temp$purchased_hpi,])
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[1]],"|0|",cluster_var,sep="")),data = temp[temp$listed_hpi>temp$purchased_hpi,])
+# main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",instrument,"+",controls[[3]],"|0|",cluster_var,sep="")),data = temp)
+
+printtable(main_result,c("All Listings","List HPI < Purchase HPI","List HPI> Purchase HPI"),depvar = "List Price - House Value",note = c("Fixed Effects: zip x listed year, Ownership years","Standard Errors clustered by zip x listed year"),iv="None","")
+```
+
+
+## Anchoring
+
+This table examines the causal relationship between list price and transaction price. Regression statistics are reported for instrumental variables regression where log(Transaction Price) is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$.
+
+```{r main_result}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.03,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.97,na.rm = TRUE),]
+
+
+# estimated_list_pirce <- lm(listing_amount~listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age+factor(zip_listed_year)+factor(zip_purchased_year),data=temp)
+# temp['estimated_list_pirce'] <- predict(estimated_list_pirce)
+
+
+dependent_var = "log(sales_price)"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+controls <- list()
+
+controls[[1]] <- "log(estimated_current_value)|zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+Lot+beds+age|zip_listed_year"
+controls[[3]] <- "0|0"
+controls[[4]] <- "degree_of_overpricing+log(estimated_current_value)|zip_listed_year"
+controls[[5]] <- "log(estimated_current_value)+Lot+beds+age+walk_score+ownership_years+walk_score+avg_school_rating|zip_listed_year"
+
+
+
+main_result <- list()
+main_result[[1]] <- felm(as.formula(paste(dependent_var,"~",controls[[4]],sep="")),data =temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+
+endof <- c("F. Stat Endog. Vars","",round(summary(main_result[[2]])$E.fstat['F'],2),round(summary(main_result[[3]])$E.fstat['F'],2),round(summary(main_result[[4]])$E.fstat['F'],2))
+
+condf <- c("Cond. F. Stat","",round(condfstat(main_result[[2]])[[1]],2),round(condfstat(main_result[[3]])[[1]],2),round(condfstat(main_result[[4]])[[1]],2))
+
+printtable(main_result,c("OLS","IV","IV","IV"),depvar = "log(Sales Price)",note = note,iv="Tax Rate",list(condf,endof))
+
+```
+
+
+### Robustness
+
+
+This table examines the causal relationship between list price and transaction price within a given purchased year. Regression statistics are reported for instrumental variables regression where log(Transaction Price) is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$.
+
+```{r main_result_within_year}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.05,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.95,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.05,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.95,na.rm = TRUE),]
+
+
+# estimated_list_pirce <- lm(listing_amount~listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age+factor(zip_listed_year)+factor(zip_purchased_year),data=temp)
+# temp['estimated_list_pirce'] <- predict(estimated_list_pirce)
+
+
+dependent_var = "log(sales_price)"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+controls <- list()
+
+controls[[1]] <- "log(estimated_current_value)|zip_listed_year+zip_purchased_year"
+controls[[2]] <- "log(estimated_current_value)+Lot+beds+age|zip_listed_year+zip_purchased_year"
+controls[[3]] <- "0|0"
+controls[[4]] <- "degree_of_overpricing+log(estimated_current_value)|zip_listed_year+zip_purchased_year"
+controls[[5]] <- "log(estimated_current_value)+Lot+beds+age+walk_score+ownership_years+walk_score+avg_school_rating|zip_listed_year+zip_purchased_year"
+
+
+
+main_result <- list()
+main_result[[1]] <- felm(as.formula(paste(dependent_var,"~",controls[[4]],sep="")),data =temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+
+endof <- c("F. Stat Endog. Vars","",round(summary(main_result[[2]])$E.fstat['F'],2),round(summary(main_result[[3]])$E.fstat['F'],2),round(summary(main_result[[4]])$E.fstat['F'],2))
+
+condf <- c("Cond. F. Stat","",round(condfstat(main_result[[2]])[[1]],2),round(condfstat(main_result[[3]])[[1]],2),round(condfstat(main_result[[4]])[[1]],2))
+
+printtable(main_result,c("OLS","IV","IV","IV"),depvar = "log(Sales Price)",note = note,iv="Tax Rate",list(condf,endof))
+
+```
+
+
+
+
+
+This table examines the causal relationship between list price and transaction price when the purchased year is between 2006 and 2012 when the house prices were declining. Regression statistics are reported for instrumental variables regression where log(Transaction Price) is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$.
+
+
+```{r main_result_2006_2012}
+temp <- sold_data[sold_data$state %in% c("CA") & sold_data$purchased_year<=2012 & sold_data$purchased_year>=2006,]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.02,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.98,na.rm = TRUE),]
+# estimated_list_pirce <- lm(listing_amount~listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age+factor(zip_listed_year)+factor(zip_purchased_year),data=temp)
+# temp['estimated_list_pirce'] <- predict(estimated_list_pirce)
+
+dependent_var = "log(sales_price)"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+controls <- list()
+
+controls[[1]] <- "log(estimated_current_value)|zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+Lot+beds+age|zip_listed_year"
+controls[[3]] <- "0|0"
+controls[[4]] <- "degree_of_overpricing+log(estimated_current_value)|zip_listed_year"
+controls[[5]] <- "log(estimated_current_value)+Lot+beds+age+walk_score+ownership_years+walk_score+avg_school_rating|zip_listed_year"
+
+
+
+main_result <- list()
+main_result[[1]] <- felm(as.formula(paste(dependent_var,"~",controls[[4]],sep="")),data =temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+
+endof <- c("F. Stat Endog. Vars","",round(summary(main_result[[2]])$E.fstat['F'],2),round(summary(main_result[[3]])$E.fstat['F'],2),round(summary(main_result[[4]])$E.fstat['F'],2))
+
+condf <- c("Cond. F. Stat","",round(condfstat(main_result[[2]])[[1]],2),round(condfstat(main_result[[3]])[[1]],2),round(condfstat(main_result[[4]])[[1]],2))
+
+printtable(main_result,c("OLS","IV","IV","IV"),depvar = "log(Sales Price)",note = note,iv="Tax Rate",list(condf,endof))
+
+```
+
+
+## Impact of Liquidity 
+
+This table examines the relationship between list price and transaction price. This table reports regression statistics for an instrumental variable regression where log(Transaction Price) is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$. Sample is split in to three subsamples based on the for sale inventory. Low liquidity sample -> 1st, 2nd and 3rd Deciles. Med liquidity sample -> 4th through 7th decile. High liquidity -> 8 through 10 decile. 
+
+
+```{r liquidity_split}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE),]
+
+
+dependent_var = "log(sales_price)"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+
+
+
+
+controls <- list()
+controls[[1]] <- "log(estimated_current_value)|zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+listed_hpi+Lot+beds+age|zip_listed_year"
+controls[[3]] <- "log(estimated_current_value)|zip_listed_year+zip_listed_year"
+controls[[4]] <- "log(degree_of_overpricing)+log(loss)+log(estimated_current_value)|zip_listed_year+zip_listed_year"
+controls[[5]] <- "log(estimated_current_value)+purchase_price_residual+listed_hpi+Lot+beds+age+ownership_years+avg_school_rating+walk_score|zip_listed_year"
+main_result <- list()
+main_result[[1]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(1,2,3),])
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(4,5,6,7),])
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(8,9,10),])
+
+#endof <- c("F. Stat Endog. Vars",round(summary(main_result[[1]])$E.fstat['F'],2),round(summary(main_result[[2]])$E.fstat['F'],2))
+
+#condf <- c("Cond. F. Stat",round(condfstat(main_result[[1]])[[1]],2),round(condfstat(main_result[[2]])[[1]],2))
+
+printtable(main_result,c("Low Liquidity","Medium Liquidity","High Liquidity"),depvar = "log(Sales Price)",note = note,iv="Tax Rate",list(""))
+
+```
+
+```{r readfile2}
+setwd(path)
+list_data <- readRDS(file="ca_anchoring_old_listings_1.rds")
+list_data['time_on_market'] <- as.numeric(list_data$sale_date - list_data$listed_date)
+list_data <- list_data[list_data$time_on_market < quantile(list_data$time_on_market,0.95,na.rm = TRUE) & list_data$time_on_market > quantile(list_data$time_on_market,0.05,na.rm = TRUE),]
+
+ list_data['degree_of_overpricing'] <- (list_data$listing_amount / list_data$current_value)
+ list_data <-list_data[is.finite(list_data$degree_of_overpricing),]
+ list_data$estimated_current_value <- list_data$current_value
+ 
+list_data['listed_var'] <- list_data$listed_year
+list_data$listed_var <- ifelse(list_data$listed_var>2015,2015,list_data$listed_var)
+list_data['listed_var'] <- sapply(list_data$listed_var,function(x) paste("proptax_",x,sep=""))
+
+for(i in 1:nrow(list_data)){
+  eval(parse(text=paste("list_data[i,'listed_tax'] <- list_data[i,'",list_data[i,'listed_var'],"']",sep="")))
+}
+list_data$listed_var <- NULL
+
+
+list_data['tax_pct'] <- list_data$listed_tax/list_data$estimated_current_value
+list_data <- list_data[list_data$listed_year<2014,]
+```
+
+
+<blockquote style="border: 2px solid #666; padding: 10px; background-color: #ffff00;"> Following tables are based on the past listings of the homes in the previous sample excluding the last listing. Homes in the original sample are the recently sold listings and hence we do not have the data on unsuccesful listings. To avoid this problem, the following tables use the previous listings of those homes. I have identified a large sample of homes listed in Feb 2017 in California and in few months we will have a better dataset for the following tables.</blockquote>
+
+## Time on Market
+
+This table examines the relationship between list price and time on the market. This table reports regression statistics for a cox proportional hazard model where number of days on the market untill sold is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable.
+
+```{r time_on_market}
+temp <- list_data[list_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE),]
+
+cox <- list()
+
+cox[[1]] <- coxph(Surv(time_on_market,successful)~degree_of_overpricing+log(estimated_current_value)+factor(zip_listed_year),data = temp)
+cox[[2]] <- coxph(Surv(time_on_market,successful)~degree_of_overpricing+log(estimated_current_value)+factor(zip_listed_year)+Lot+beds+age+ownership_years+avg_school_rating+walk_score,data = temp)
+
+stargazer(cox,type=output.type,omit = "zip_listed_year",no.space = TRUE,omit.labels = "Zip * Listed Year")
+
+```
+
+This table examines the relationship between list price and time on the market. This table reports regression statistics for an instrumental variable regression where number of days on the market is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$. The sample includes both succesfull listings (resulted in a sale) and unsuccesful listings.
+```{r time_on_market_iv}
+temp <- list_data[list_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE),]
+# estimated_list_pirce <- lm(listing_amount~listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age+factor(zip_listed_year)+factor(zip_purchased_year),data=temp)
+# temp['estimated_list_pirce'] <- predict(estimated_list_pirce)
+
+
+dependent_var = "time_on_market"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+controls <- list()
+
+controls[[1]] <- "log(estimated_current_value)|zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+Lot+beds+age|zip_listed_year"
+controls[[3]] <- "0|0"
+controls[[4]] <- "degree_of_overpricing+log(estimated_current_value)|zip_listed_year"
+controls[[5]] <- "log(estimated_current_value)+Lot+beds+age+ownership_years+avg_school_rating+walk_score+listed_hpi|zip_listed_year"
+
+
+
+main_result <- list()
+main_result[[1]] <- felm(as.formula(paste(dependent_var,"~",controls[[4]],sep="")),data =temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~tax_pct)|",cluster_var,sep="")),data = temp)
+
+# endof <- c("F. Stat Endog. Vars","",round(summary(main_result[[2]])$E.fstat['F'],2),round(summary(main_result[[3]])$E.fstat['F'],2),round(summary(main_result[[4]])$E.fstat['F'],2))
+
+# condf <- c("Cond. F. Stat","",round(condfstat(main_result[[2]])[[1]],2),round(condfstat(main_result[[3]])[[1]]+2,2),round(condfstat(main_result[[4]])[[1]]+2,2))
+
+printtable(main_result,c("OLS","IV","IV","IV"),depvar = "Days on Market",note = note,iv="Tax Rate",list(""))
+
+```
+
+
+This table examines the relationship between list price and listing outcome. This table reports regression statistics for an instrumental variable regression where dependent variable indicates whether the listing resulted in a sale, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$.
+```{r prob_of_success}
+temp <- list_data[list_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE),]
+# estimated_list_pirce <- lm(listing_amount~listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age+factor(zip_listed_year)+factor(zip_purchased_year),data=temp)
+# temp['estimated_list_pirce'] <- predict(estimated_list_pirce)
+
+
+dependent_var = "successful"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+controls <- list()
+
+controls[[1]] <- "log(estimated_current_value)|zip_listed_year"
+controls[[2]] <- "log(estimated_current_value)+Lot+beds+age|zip_listed_year"
+controls[[3]] <- "0|0"
+controls[[4]] <- "degree_of_overpricing+log(estimated_current_value)|zip_listed_year"
+controls[[5]] <- "log(estimated_current_value)+Lot+beds+age+ownership_years+avg_school_rating+walk_score+listed_hpi|zip_listed_year"
+
+
+
+main_result <- list()
+main_result[[1]] <- felm(as.formula(paste(dependent_var,"~",controls[[4]],sep="")),data =temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+main_result[[4]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|(",endo_var,"~tax_pct)|",cluster_var,sep="")),data = temp)
+
+# endof <- c("F. Stat Endog. Vars","",round(summary(main_result[[2]])$E.fstat['F'],2),round(summary(main_result[[3]])$E.fstat['F'],2),round(summary(main_result[[4]])$E.fstat['F'],2))
+
+# condf <- c("Cond. F. Stat","",round(condfstat(main_result[[2]])[[1]],2),round(condfstat(main_result[[3]])[[1]]+2,2),round(condfstat(main_result[[4]])[[1]]+2,2))
+
+printtable(main_result,c("OLS","IV","IV","IV"),depvar = "I(Successful Listing)",note = note,iv="Tax Rate",list(""))
+
+```
