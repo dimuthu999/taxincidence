@@ -484,6 +484,51 @@ printtable(main_result,c("All Listings","List HPI < Purchase HPI","List HPI> Pur
 
 ## Anchoring
 
+
+### First Stage
+This table examines the relationship between tax rate and $$\frac{ListPrice}{HouseValue}$$. Regression statistics are reported for an ordinary least squares regression with $$\frac{ListPrice}{HouseValue}$$ as dependent variable and tax rate, defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$, as the independent variable. 
+
+```{r first_stage}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.03,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.97,na.rm = TRUE),]
+
+
+# estimated_list_pirce <- lm(listing_amount~listed_hpi+ownership_years+avg_school_rating+walk_score+Lot+baths+beds+age+factor(zip_listed_year)+factor(zip_purchased_year),data=temp)
+# temp['estimated_list_pirce'] <- predict(estimated_list_pirce)
+
+
+dependent_var = "degree_of_overpricing"
+endo_var = "degree_of_overpricing"
+instrument = "tax_pct"
+cluster_var = "zip_listed_year"
+
+controls <- list()
+
+controls[[1]] <- "tax_pct+log(estimated_current_value)|zip_listed_year"
+controls[[2]] <- "tax_pct+log(estimated_current_value)+Lot+beds+age|zip_listed_year"
+controls[[3]] <- "0|0"
+controls[[4]] <- "tax_pct+degree_of_overpricing+log(estimated_current_value)|zip_listed_year"
+controls[[5]] <- "tax_pct+log(estimated_current_value)+Lot+beds+age+walk_score+ownership_years+walk_score+avg_school_rating|zip_listed_year"
+
+
+
+main_result <- list()
+main_result[[1]]  <- felm(as.formula(paste(dependent_var,"~",controls[[1]],"|0|",cluster_var,sep="")),data = temp)
+main_result[[2]]  <- felm(as.formula(paste(dependent_var,"~",controls[[2]],"|0|",cluster_var,sep="")),data = temp)
+main_result[[3]]  <- felm(as.formula(paste(dependent_var,"~",controls[[5]],"|0|",cluster_var,sep="")),data = temp)
+
+
+
+printtable(main_result,c("","",""),depvar = "Degree of Overpricing",note = note,iv="None",list(""))
+
+
+```
+
+
+### Second Stage
+
 This table examines the causal relationship between list price and transaction price. Regression statistics are reported for instrumental variables regression where log(Transaction Price) is the dependent variable, $$ \frac{listprice}{housevalue} $$ is the independent variable being instrumented for, and property tax rate is used as the instrument. Property tax rate is defined as $$ \frac{\text{Property taxes year before listing}}{House Value in listing year} $$.
 
 ```{r main_result}
