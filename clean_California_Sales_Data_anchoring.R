@@ -64,7 +64,7 @@ sold_data$Builtin <- sapply(sold_data$Builtin,function (x) as.numeric(gsub("[^0-
 sold_data$Lastremodelyear <- sapply(sold_data$Lastremodelyear,function (x) as.numeric(gsub("[^0-9]", "", x)))
 
 sold_data <- sold_data[!duplicated(sold_data$link),]
-sold_data$Lot <- ifelse(sold_data$Lot<quantile(sold_data$Lot,0.99,na.rm = TRUE) & sold_data$Lot >quantile(sold_data$Lot,0.05,na.rm = TRUE),sold_data$Lot,NA )
+sold_data$Lot <- ifelse(sold_data$Lot<quantile(sold_data$Lot,0.999,na.rm = TRUE) & sold_data$Lot >quantile(sold_data$Lot,0.001,na.rm = TRUE),sold_data$Lot,NA )
 
 
 # Listing Data ---------------------------------------------------------
@@ -107,6 +107,23 @@ for(i in 1:nrow(sold_data)){
           if(tolower(substr(temp[k],10,13))=="sold") break
           if(tolower(substr(temp[k],10,24))=="listed for sale") {
             listedinfo = temp[k]
+            
+            sold_date <- as.Date(substr(temp[j],1,8), "%m/%d/%y",origin="1970-01-01")
+            listing_removed <- NA
+            
+            for(m in k:j) {
+              if(tolower(substr(temp[m],10,24))=="listing removed") {
+                listing_removed <- as.Date(substr(temp[m],1,8), "%m/%d/%y",origin="1970-01-01")
+                listing_removed <- as.numeric(sold_date-listing_removed)
+              }
+            }
+            
+            if(listing_removed>100 & !is.na(listing_removed)) {
+              l=k
+              recordcomplete = TRUE
+              break
+            }
+            
             purchasedinfo <- NA
             l=k+1
             while(l <=length(temp)){
@@ -117,8 +134,10 @@ for(i in 1:nrow(sold_data)){
               }
               l=l+1
             }
-
-            listing_data[i,]<- c(i,sold_data[i,'link'],temp[j],listedinfo,purchasedinfo,"",1)
+            
+            if(is.na(listing_removed) | (listing_removed<100)) {
+              listing_data[i,]<- c(i,sold_data[i,'link'],temp[j],listedinfo,purchasedinfo,"",1)
+            }
             recordcomplete = TRUE
           }
         }
@@ -189,8 +208,8 @@ listing_data['sales_price'] <- sapply(listing_data$transaction_info,function(x) 
 listing_data['sales_price'] <- sapply(listing_data$sales_price,function(x) paste(gsub(",", "", x)," "))
 listing_data['sales_price'] <- sapply(listing_data$sales_price,function(x) as.numeric(substr(x,1,gregexpr("[^0-9]",x)[[1]][1]-1)))
 
-listing_data['end_type'] <- sapply(listing_data$transaction_info, function(x) substr(x,10,13))
-listing_data['successful'] <- ifelse(listing_data$end_type=="Sold",1,0)
+# listing_data['end_type'] <- sapply(listing_data$transaction_info, function(x) substr(x,10,13))
+# listing_data['successful'] <- ifelse(listing_data$end_type=="Sold",1,0)
 
 listing_data$listed_date <- as.Date(listing_data$listed_date,origin = "1970-01-01")
 listing_data['listed_year'] <- year(listing_data$listed_date )
@@ -322,7 +341,7 @@ sold_data['current_value'] <- sold_data$purchased_amount * sold_data$listed_hpi/
 sold_data['age'] <- sold_data$sale_year - sold_data$Builtin
 sold_data['zip_listed_year'] <- paste(sold_data$zip,sold_data$listed_year)
 sold_data['zip_purchased_year'] <- paste(sold_data$zip,sold_data$purchased_year)
-sold_data <-sold_data[sold_data$purchased_year >1978 & sold_data$purchased_year<=2014,]
+sold_data <-sold_data[sold_data$purchased_year<=2014,]
 # sold_data <- sold_data[is.finite(log(sold_data$prop_tax_last3)) & is.finite(log(sold_data$prop_tax_last3_2010)),]
 sold_data['ownership_years'] <- sold_data$sale_year - sold_data$purchased_year
 sold_data$proptax_2015 <- ifelse(sold_data$proptax_2015>0,sold_data$proptax_2015,ifelse(sold_data$proptax_2014>0,sold_data$proptax_2014,sold_data$proptax_2013))
@@ -348,4 +367,4 @@ inventory_data['inventory_decile'] <- ntile(inventory_data$inventory, 10)
 sold_data <- merge(sold_data,inventory_data,by=c("listed_year","zip"),all.x = TRUE)
 
 
-saveRDS(sold_data,file="ca_anchoring_10.rds")
+saveRDS(sold_data,file="ca_anchoring_11.rds")
