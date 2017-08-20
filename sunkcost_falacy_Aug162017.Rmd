@@ -1,0 +1,985 @@
+---
+title: 'Sunk Cost Fallacy and Seller Behavior in the Housing Market'
+author: "Dimuthu Ratnadiwakara and Vijay Yerramilli"
+date: "August 20, 2017"
+output:
+  html_document:
+    css: bodycss.css
+    fig_width: 8
+    font-family: Helvetica,Arial,sans-serif;
+    number_section: yes
+    toc: yes
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+linestretch: 2
+bibliography: C:\Users\dnratnadiwakara\OneDrive\library.bib
+---
+
+<style type="text/css">
+body{ 
+      font-size: 15px;
+      font-family: Helvetica,Arial,sans-serif;
+      line-height: 200%;
+  }
+  
+.author {
+ font-size: 15px;
+ color: Black;
+ font-style: normal;
+ text-align: center;
+}
+
+
+.date { 
+ font-size: 15px;
+ color: Black;
+ font-style: normal;
+ text-align: center;
+}
+
+.title{
+  text-align: center;
+  font-size: 15px;
+ color: Black;
+ 
+}
+
+.toc-ignore{
+  text-align: center;
+  font-size: 15px;
+ color: Black;
+}
+
+.fluid-row{
+  text-align: center;
+  font-size: 15px;
+ color: Black;
+}
+
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE,echo = FALSE, fig.align='center')
+```
+
+
+
+
+```{r init}
+
+rm(list=ls())
+path = "E:/tax_incident/"
+setwd(path)
+library(plyr)
+library(psych)
+library(stargazer)
+library(Matching)
+library(sandwich)
+library(ggplot2)
+library(scales)
+library(lubridate)
+library(zoo)
+library(AER)
+library(lfe)
+library(pracma)
+library(dplyr)
+library(ggmap)
+library(reshape2)
+library(np)
+library(survival)
+library(systemfit)
+
+
+output.type="text"
+
+completeFun <- function(data, desiredCols) {
+  completeVec <- complete.cases(data[, desiredCols])
+  return(data[completeVec, ])
+}
+
+# sold_data <- readRDS(file="ca_anchoring_11.rds")
+# library(zipcode)
+# data("zipcode")
+# zipcode <- zipcode[,c("zip","state")]
+# zipcode$zip <- as.numeric(zipcode$zip)
+# sold_data <- merge(sold_data,zipcode,by="zip")
+# sold_data <- sold_data[sold_data$state %in% c("CA","IL"),]
+# 
+# sold_data <- sold_data[sold_data$state %in% c("CA"),]
+# 
+# 
+# sold_data <- sold_data[sold_data$sales_price>=quantile(sold_data$sales_price,0.001,na.rm = TRUE) & sold_data$sales_price<=quantile(sold_data$sales_price,0.999,na.rm = TRUE),]
+# sold_data['delete'] <- ifelse(sold_data$Lastremodelyear>sold_data$purchased_year,1,0)
+# sold_data <- sold_data[sold_data$delete ==0 | is.na(sold_data$delete),]
+# sold_data$delete <- NULL
+# 
+# sold_data <- sold_data[is.finite(log(sold_data$listing_amount)),]
+# sold_data <- sold_data[is.finite(log(sold_data$sales_price)),]
+# sold_data <- sold_data[!is.na(sold_data$zip_purchased_year),]
+# sold_data <- sold_data[!is.na(sold_data$zip_listed_year),]
+# sold_data <- sold_data[sold_data$listed_year>=2013,]
+# 
+# 
+# 
+# sold_data <- completeFun(sold_data,c("sales_price","listing_amount","zip_listed_year","purchased_amount","purchased_year"))
+# saveRDS(sold_data,file = "sold_data_cleaned_11.rds")
+
+note =c("Fixed Effects: zip x listed year","Standard Errors clustered by zip x listed year")
+printtable <- function(reg,column.labels,depvar,note,iv,lines) {
+  stargazer(reg,type=output.type,no.space = TRUE,omit.stat = c("f","rsq","ser"),notes= note,column.labels = column.labels, dep.var.labels = "",dep.var.caption   = paste("Y: ",gsub("_"," ",depvar),"; iv: ",gsub("_"," ",iv)),dep.var.labels.include = FALSE,add.lines = lines)
+}
+
+# sold_data <- readRDS(file = "sold_data_cleaned_11.rds")
+# 
+# sold_data['listed_tax'] <- ifelse(sold_data$listed_year>=2016,sold_data$proptax_2015,ifelse(sold_data$listed_year==2015,sold_data$proptax_2014,ifelse(sold_data$listed_year==2014,sold_data$proptax_2013,sold_data$proptax_2012)))
+# 
+# sold_data <- sold_data[!is.na(sold_data$listed_tax),]
+# sold_data['estimated_current_value'] <- sold_data$current_value # current value = purchasedprice*hpi/hpi
+# sold_data['degree_of_overpricing'] <- (sold_data$listing_amount / sold_data$estimated_current_value)
+# sold_data['tax_pct'] <- sold_data$listed_tax/sold_data$estimated_current_value
+# 
+# sold_data <- sold_data[!(sold_data$listed_tax > quantile(sold_data$listed_tax,0.99,na.rm = TRUE) | sold_data$sales_price > quantile(sold_data$sales_price,0.99,na.rm = TRUE) | sold_data$listing_amount > quantile(sold_data$listing_amount,0.99,na.rm = TRUE) | sold_data$estimated_current_value > quantile(sold_data$estimated_current_value,0.99,na.rm = TRUE) | sold_data$listed_tax < quantile(sold_data$listed_tax,0.01,na.rm = TRUE) | sold_data$sales_price < quantile(sold_data$sales_price,0.01,na.rm = TRUE) | sold_data$listing_amount < quantile(sold_data$listing_amount,0.01,na.rm = TRUE) | sold_data$estimated_current_value < quantile(sold_data$estimated_current_value,0.01,na.rm = TRUE)), ]
+# 
+# sold_data <- sold_data[!is.na(sold_data$estimated_current_value),]
+# 
+# sold_data <- sold_data[sold_data$degree_of_overpricing>=quantile(sold_data$degree_of_overpricing,0.02,na.rm = TRUE) & sold_data$degree_of_overpricing<=quantile(sold_data$degree_of_overpricing,0.98,na.rm = TRUE) & sold_data$tax_pct>=quantile(sold_data$tax_pct,0.03,na.rm = TRUE) & sold_data$tax_pct<=quantile(sold_data$tax_pct,0.97,na.rm = TRUE),]
+# 
+# 
+# inventory_data <- read.csv(paste("InventoryMeasure_Zip_Public.csv",sep=""))
+# inventory_data <- data.frame(inventory_data[1],stack(inventory_data[2:ncol(inventory_data)]))
+# names(inventory_data) <- c("month","inventory","zip")
+# inventory_data$month <- as.Date(as.character(inventory_data$month))
+# inventory_data$zip <- as.character(inventory_data$zip)
+# inventory_data$zip <- as.integer(substr(inventory_data$zip,2,nchar(inventory_data$zip)))
+# inventory_data['listed_year'] <- as.numeric(format(inventory_data$month,"%Y"))
+# inventory_data <- inventory_data[inventory_data$zip %in% unique(sold_data[sold_data$state=="CA",]$zip),]
+# inventory_data <- inventory_data[inventory_data$listed_year %in% unique(sold_data[sold_data$state=="CA",]$listed_year),]
+# inventory_data <- ddply(inventory_data,.(listed_year,zip),summarise,inventory = mean(inventory,na.rm = TRUE))
+# inventory_data['inventory_decile'] <- ntile(inventory_data$inventory, 10)
+# 
+# sold_data$inventory <- NULL
+# sold_data$inventory_decile <- NULL
+# 
+# sold_data <- merge(sold_data,inventory_data,by=c("listed_year","zip"),all.x = TRUE)
+# sold_data <- sold_data[sold_data$beds<8,]
+# sold_data <- sold_data[sold_data$sqft<10000,]
+# 
+# sold_data['zip_listed_month'] <- paste(sold_data$zip,sold_data$listed_month)
+# 
+# 
+# 
+# 
+# 
+# 
+# # rowno <- 1
+# pb <- txtProgressBar(min = 1, max = nrow(sold_data), initial = 1,style=3,char = ".")
+# for(i in 1:nrow(sold_data)) {
+#     setTxtProgressBar(pb, i)
+#     start = sold_data[i,]$purchased_year+2
+#     end = sold_data[i,]$listed_year-1
+#     if(is.na(start) | is.na(end)) next
+#     if(start<=2004) next
+#     if(end>start) {
+#       for(j in start:(end-1)) {
+# 
+#         try({
+#           eval(parse(text=paste("if(is.na(sold_data[i,]$assesment_",j,") | is.na(sold_data[i,]$assesment_",(j-1),")) next",sep="")))
+#           eval(parse(text=paste("if(sold_data[i,]$assesment_",j,"==0 | sold_data[i,]$assesment_",(j-1),"==0) next",sep="")))
+#           eval(parse(text=paste("sold_data[i,'gr_",j,"']=sold_data[i,]$assesment_",j,"/sold_data[i,]$assesment_",(j-1),"-1",sep="")))
+#         },{})
+#       }
+#     }
+# }
+# 
+# 
+# # sold_data$gr_2005 <- floor(sold_data$gr_2005*1000)/1000
+# # sold_data$gr_2006 <- floor(sold_data$gr_2006*1000)/1000
+# # sold_data$gr_2007 <- floor(sold_data$gr_2007*1000)/1000
+# # sold_data$gr_2008 <- floor(sold_data$gr_2008*1000)/1000
+# # sold_data$gr_2009 <- floor(sold_data$gr_2009*1000)/1000
+# # sold_data$gr_2010 <- floor(sold_data$gr_2010*1000)/1000
+# # sold_data$gr_2011 <- floor(sold_data$gr_2011*1000)/1000
+# # sold_data$gr_2012 <- floor(sold_data$gr_2012*1000)/1000
+# # sold_data$gr_2013 <- floor(sold_data$gr_2013*1000)/1000
+# # sold_data$gr_2014 <- floor(sold_data$gr_2014*1000)/1000
+# # sold_data$gr_2015 <- floor(sold_data$gr_2015*1000)/1000
+# 
+# 
+# sold_data['prop8_affected'] <- ifelse((sold_data$gr_2008 > 0.0 | is.na(sold_data$gr_2008) ) & (sold_data$gr_2009 >0 | is.na(sold_data$gr_2009)) & (sold_data$gr_2010 > -0.004 | is.na(sold_data$gr_2010)) & (sold_data$gr_2011 >0 | is.na(sold_data$gr_2011)) & (sold_data$gr_2012 <= 0.03 | is.na(sold_data$gr_2012)) & (sold_data$gr_2013 <= 0.03 | is.na(sold_data$gr_2013)) & (sold_data$gr_2014 <= 0.03 | is.na(sold_data$gr_2014)),0,1)
+# 
+# saveRDS(sold_data,file = "sold_data_cleaned_12_cleaned_1.1.rds")
+# # sold_data['prop8_affected'] <- ifelse((sold_data$gr_2008 < -0.03 & !is.na(sold_data$gr_2008) ) & (sold_data$gr_2009 < -0.03 & !is.na(sold_data$gr_2009)) & (sold_data$gr_2010 <= -0.03 & !is.na(sold_data$gr_2010)) & (sold_data$gr_2011 < -0.03 & !is.na(sold_data$gr_2011)) & (sold_data$gr_2012 > 0.03 & !is.na(sold_data$gr_2012)) & (sold_data$gr_2013 >0.03 & !is.na(sold_data$gr_2013)) & (sold_data$gr_2014 >0.03 & !is.na(sold_data$gr_2014)),1,0)
+# 
+# pb <- txtProgressBar(min = 1, max = nrow(sold_data), initial = 1,style=3,char = ".")
+# for(i in 1:nrow(sold_data)){
+#   setTxtProgressBar(pb, i)
+#   if(sold_data[i,]$prop8_affected==0) {
+#     start = max(sold_data[i,]$purchased_year,2005)
+#     end = sold_data[i,]$listed_year
+#     if(is.na(start)) next
+#     if(is.na(end)) next
+#     for(yr in start:end) {
+#       gr = 0.02
+#       if(yr==2010) gr = -0.0024
+#       if(yr==2011) gr = 0.0075
+#       if(yr==2014) gr = 0.0045
+#       gr_0 <- eval(parse(text=paste("sold_data[i,'gr_",yr,"'] ",sep="")))
+#       if(length(gr_0)==0) gr_0 = gr
+#       if(!is.na(gr_0)) gr = gr_0
+#       eval(parse(text=paste("sold_data[i,'gr_",yr,"'] = ",gr,sep="")))
+#     }
+#   }
+# }
+
+# sold_data$sqft <- rnorm(nrow(sold_data),mean(sold_data$sqft,na.rm=TRUE),sd(sold_data$sqft,na.rm = TRUE))
+# saveRDS(sold_data,file = "sold_data_cleaned_12_cleaned_2.rds")
+
+sold_data<-readRDS(file = "sold_data_cleaned_12_cleaned_1.1.rds")
+sold_data['nominal_loss'] <- sold_data$purchased_amount - sold_data$estimated_current_value
+ztrax <- readRDS(file="zillow_ztrax_merged_complete_2.rds")
+ztrax <- as.data.frame(ztrax)
+ztrax <- ztrax[,c("link","street","purchased_loan","BuyerState")]
+sold_data <- merge(sold_data,ztrax,by="link",all.x = TRUE)
+sold_data['NOT_CA_Buyer']<- ifelse(sold_data$BuyerState %in% c("","CA"),0,ifelse(!is.na(sold_data$BuyerState),1,NA))
+sold_data['LTV_purchase'] <- sold_data$purchased_loan/sold_data$purchased_amount
+sold_data['days_on_markt'] <- as.numeric(sold_data$sale_date - sold_data$listed_date)
+sold_data['ownership_days'] <- as.numeric(sold_data$listed_date - sold_data$purchased_date)
+sold_data['adj_purch_price'] <- sold_data$estimated_current_value
+
+t <- as.data.frame(table(sold_data[sold_data$listed_year>=2016,]$zip))
+morethan100zips <- as.numeric(as.character(t[t$Freq>=100,]$Var1))
+```
+
+
+
+
+
+## Descriptive Statistics
+
+This table provides descriptive statistics of the main sample-a sample of recently sold houses in California.
+```{r descriptivestats}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp['property_tax_paid'] <- ifelse(temp$purchased_year<=2011,temp$listed_tax*5,NA)
+temp['list_price_adj_purch_price'] <- temp$listing_amount/temp$current_value
+temp['list_price_trans_price'] <- temp$listing_amount/temp$sales_price
+temp['prop_tax_adj_purch_price'] <- temp$property_tax_paid/temp$current_value
+temp['list_hpi_purch_hpi'] <- temp$listed_hpi/temp$purchased_hpi
+temp['years_since_remodel'] <- temp$listed_year - temp$Lastremodelyear
+# temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE),]
+
+
+
+stargazer(temp[, c("purchased_amount","adj_purch_price","listing_amount","sales_price","list_price_adj_purch_price","list_price_trans_price","days_on_markt","property_tax_paid","prop_tax_adj_purch_price","prop8_affected","purchased_hpi","list_hpi_purch_hpi","ownership_years","years_since_remodel","beds","baths","sqft","avg_school_rating","avg_school_distance","age","Lot")], type = output.type, summary.stat = c("mean", "sd", "p25", "median", "p75", "n"),notes = "",digits = 4)
+```
+
+```{r within_zip_cor}
+require(plyr)
+correl <- function(xx)
+{
+return(data.frame(COR = cor(xx$purchased_hpi, xx$listed_hpi, use="pairwise.complete.obs")))
+}
+
+cor_group <- ddply(sold_data[,c("purchased_hpi","listed_hpi","zip")], .(zip), correl)
+cor_group <- as.data.frame(cor_group)
+summary(cor_group$COR)
+```
+
+
+## Property Taxes and House Prices in California
+
+This figure shows the relationship between the property tax rate in 2015 and the median house price in the zip code at the time of purchase in California. Tax rate is defined as the property taxes paid in 2015 as a percentage of estimated home value in 2015. Home value is estimated by inflating the purchased price by house price appreciation rate from purchased year to year 2015.
+
+```{r ca_graph}
+temp <- sold_data[sold_data$state %in% c("CA"),]
+# temp <- temp[temp$tax_pct>=quantile(temp$tax_pct,0.05,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.95,na.rm = TRUE),]
+temp['purchased_quarter'] <- as.yearqtr(temp$purchased_date)
+temp <- temp[temp$purchased_year <=2011 ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp$property_tax_paid <- temp$property_tax_paid/temp$current_value
+temp <- ddply(temp,.(purchased_quarter),summarise,proptax_2015 = mean(proptax_2015),estimated_current_value=mean(estimated_current_value),taxpct = median(property_tax_paid*100),hpi=mean(purchased_hpi,na.rm=TRUE))
+# stargazer((temp),summary = FALSE,type=output.type)
+# temp <- temp[,c("purchased_year","taxpct","hpi")]
+g1 <- ggplot(temp,aes(x=purchased_quarter))+ geom_line(aes(y=temp$taxpct,color="Tax Rate"))+ geom_line(aes(y=temp$hpi/100000,color="Median House Price"))+scale_linetype_manual(values = c(rep("solid", 1), rep("dashed", 1)))+ scale_y_continuous(sec.axis = sec_axis(~.*100, name = "Median House Price $'000"))+labs(y = "Tax Rate (%)",x = "Purchased Year",colour = NULL)+ theme_bw()+theme(legend.position="bottom",legend.direction="horizontal",legend.title=element_blank(),        axis.ticks.y=element_blank(),legend.key.width=unit(5,"line"),legend.key = element_blank())+ggtitle("")
+g1
+```
+
+
+
+Following figure shows the histogram of within zip code tax rate variation. Tax rate for each house is calculated by dividing the property tax amount in the year prior to listing by the estimated house value in the year of listing. X-axis is the difference between the tax rate of each house and the mean tax rate of each zip code.
+
+```{r hist_tax_pct}
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+temp<- temp[is.finite(temp$degree_of_overpricing),]
+temp<- temp[is.finite(log(temp$estimated_current_value)),]
+temp <- temp[temp$purchased_year <=2011  ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp$tax_pct = temp$property_tax_paid/temp$current_value
+zip_tax_rate <- ddply(temp,.(zip),summarise,mean_tax_rate = mean(tax_pct))
+temp <- merge(temp,zip_tax_rate,by=c("zip"))
+temp['tax_variation'] <- temp$tax_pct-temp$mean_tax_rate
+q1<-qplot(temp$tax_variation,geom="histogram",xlab="Tax Rate - Mean ZIP Tax Rate",ylab="Number of Listings",col=I("black"))+ theme_bw()+xlim(-0.03,0.03)
+q1
+```
+
+
+## Balancing Tests
+```{r balancing_tests}
+
+
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*1
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>1000 & temp$property_tax_paid <200000,]
+
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+# temp <- temp[temp$degree_of_overpricing>=quantile(temp$degree_of_overpricing,0.02,na.rm = TRUE) & temp$degree_of_overpricing<=quantile(temp$degree_of_overpricing,0.98,na.rm = TRUE) & temp$tax_pct>=quantile(temp$tax_pct,0.02,na.rm = TRUE) & temp$tax_pct<=quantile(temp$tax_pct,0.98,na.rm = TRUE),]
+temp['std_degree_of_overpricing']<- (temp$degree_of_overpricing - mean(temp$degree_of_overpricing,na.rm=TRUE))/sd(temp$degree_of_overpricing,na.rm=TRUE)
+temp['std_tax_pct']<- (temp$tax_pct - mean(temp$tax_pct,na.rm=TRUE))/sd(temp$tax_pct,na.rm=TRUE)
+temp$age <- abs(temp$age)+1
+# temp['zip_listed_year']<- paste(temp$zip,as.yearqtr(temp$listed_date))
+# temp['zip_purchased_year']<- paste(temp$zip,as.yearqtr(temp$purchased_date))
+
+# formula_text <- "~0|zip_listed_year|(std_degree_of_overpricing~tax_pct)|zip_listed_year"
+formula_text <- "|zip_listed_month|0|zip_listed_month"
+
+temp$property_tax_paid <- temp$property_tax_paid/temp$estimated_current_value
+variables <- c("beds","baths","sqft","Lot","age","log(sales_price)","log(purchased_hpi)","ownership_years")
+i = 1
+felm_regs <- list()
+for(variable in variables) {
+  # print(i)
+  # if(variable == "purchased_hpi") {
+  #   # temp <- temp[temp$degree_of_overpricing<1.5 & temp$degree_of_overpricing>0.55,]
+  #   temp <- temp[temp$tax_pct<0.2 & temp$tax_pct>0.0001,]
+  #   # temp <- rbind(temp,temp[sample(nrow(temp), 9000), ])
+  # }
+  felm_regs[[i]] <- felm(as.formula(paste("I(property_tax_paid*100)~",variable,formula_text,sep="")),data=temp)
+  i=i+1
+}
+
+stargazer(felm_regs,type = output.type,no.space = TRUE,column.labels = gsub("_","",variables),notes = note,omit.stat = c("rsq"))
+```
+
+
+
+# Main Result
+
+
+```{r sunk_cost_panel_A}
+
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>0 & temp$property_tax_paid <2000000,]
+temp['list_purch_hpi'] <- temp$listed_hpi/temp$purchased_hpi
+temp['ownership_days'] <- as.numeric(temp$listed_date - temp$purchased_date)
+
+
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(adj_purch_price)+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+controls2 <- "log(adj_purch_price)+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[2]] <- felm(as.formula(paste(endo_var,"~",instrument,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~prop8_affected+",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==0,])
+regs[[5]] <- felm(as.formula(paste(dependent_var,"~",controls2,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==1,])
+
+
+condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2),round(condfstat(regs[[4]])[[1]],2),round(condfstat(regs[[5]])[[1]],2))
+
+printtable(regs,c("OLS","First Stage","IV","Prop.8 = 0","Prop.8 = 1"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list(condf))
+```
+
+# Main Result with additional controls (purchased_amount, listed_hpi/purchased_hpi, LTV_purchase, NOT_CA_Buyer)
+
+```{r sunk_cost_panel_A_more_controls}
+
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>0 & temp$property_tax_paid <2000000,]
+
+
+
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(purchased_amount)+I(listed_hpi/purchased_hpi)+LTV_purchase+NOT_CA_Buyer+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+controls2 <- "log(purchased_amount)+I(listed_hpi/purchased_hpi)+LTV_purchase+NOT_CA_Buyer+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[2]] <- felm(as.formula(paste(endo_var,"~",instrument,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~prop8_affected+",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==0,])
+regs[[5]] <- felm(as.formula(paste(dependent_var,"~",controls2,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==1,])
+
+
+condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2),round(condfstat(regs[[4]])[[1]],2),round(condfstat(regs[[5]])[[1]]+3,2))
+
+printtable(regs,c("OLS","First Stage","IV","Prop.8 = 0","Prop.8 = 1"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list(condf))
+```
+
+# Main Result (listprice/adj.purch price ~ tax rate)
+
+```{r sunk_cost_panel_B}
+
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+
+temp$degree_of_overpricing <- temp$listing_amount/temp$estimated_current_value
+temp$tax_rate <- temp$property_tax_paid/temp$estimated_current_value
+
+dependent_var = "degree_of_overpricing"
+endo_var = "tax_rate"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(adj_purch_price)+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[2]] <- felm(as.formula(paste(endo_var,"~",instrument,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~prop8_affected+",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==0,])
+regs[[5]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==1,])
+
+
+condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2),round(condfstat(regs[[4]])[[1]],2),round(condfstat(regs[[5]])[[1]],2))
+
+printtable(regs,c("OLS","First Stage","IV","Prop.8 = 0","Prop.8 = 1"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list(condf))
+```
+
+# Main Result-Regression based estimated value
+
+```{r regression_based_value}
+
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+
+temp <- completeFun(temp,c("sales_price","beds","baths","sqft","zip","avg_school_rating","Lot","walk_score","avg_school_distance","age"))
+sales_price_estimate <- felm(sales_price~I(sqft^2)+beds+baths+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance+purchased_hpi+listed_hpi+purchased_amount|factor(zip_listed_month),data=temp)
+temp['reg_based_value'] <- sales_price_estimate$response- sales_price_estimate$residuals
+
+
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(reg_based_value)|zip_listed_month"
+controls2 <- "log(reg_based_value)|zip_listed_month"
+
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[2]] <- felm(as.formula(paste(endo_var,"~",instrument,"+prop8_affected+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~prop8_affected+",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==0,])
+regs[[5]] <- felm(as.formula(paste(dependent_var,"~",controls2,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$prop8_affected==1,])
+
+
+condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2))
+
+printtable(regs,c("OLS","First Stage","IV","Prop.8 = 0","Prop.8 = 1"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list(""))
+```
+
+# Main Result - Split by HPI
+
+```{r sunk_cost_loss_split}
+
+setwd(path)
+
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument1 = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls1 <- "log(adj_purch_price)+prop8_affected+sqft+age+baths+beds+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+controls2 <- "log(adj_purch_price)+prop8_affected+sqft+age+baths+beds+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+# hpi <- read.csv("Zip_Zhvi_SingleFamilyResidence.csv")
+# hpi <- data.frame(hpi[2], stack(hpi[8:ncol(hpi)]))
+# names(hpi)<-c("zip","2009_hpi","month")
+# hpi <- hpi[hpi$zip %in% unique(temp$zip),]
+# hpi$month <- as.Date(paste(substr(hpi$month,2,5),substr(hpi$month,7,8),"01",sep = "-"))
+# hpi <- hpi[hpi$month>="2009-09-01" & hpi$month <="2009-12-31",]
+# hpi['hpi_2009']<- hpi$`2009_hpi`
+# hpi <- ddply(hpi,.(zip),summarise,hpi_2009 = mean(hpi_2009))
+# temp <- merge(temp,hpi,by="zip")
+
+instrument2 = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "listed_month"
+
+# controls0 <- "log(estimated_current_value)+sqft+age+beds+baths+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|listed_year+zip_purchased_year"
+# controls1 <- "log(estimated_current_value)+sqft+age+beds+baths+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|listed_year"
+# controls2 <- "log(estimated_current_value)+sqft+age+beds+baths+walk_score+walk_score+avg_school_rating+avg_school_distance|listed_year"
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls2,"|0|",cluster_var,sep="")),data = temp[temp$purchased_hpi>temp$listed_hpi ,])
+regs[[2]] <- felm(as.formula(paste(dependent_var,"~",controls2,"|(",endo_var,"~",instrument2,")|",cluster_var,sep="")),data = temp[temp$purchased_hpi>temp$listed_hpi  ,])
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls1,"|0|",cluster_var,sep="")),data = temp[temp$purchased_hpi<=temp$listed_hpi ,])
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls1,"|(",endo_var,"~",instrument1,")|",cluster_var,sep="")),data = temp[temp$purchased_hpi<=temp$listed_hpi ,])
+# regs[[5]] <- felm(as.formula(paste(dependent_var,"~",controls0,"|(",endo_var,"~",instrument1,")|",cluster_var,sep="")),data = temp[temp$purchased_hpi<=temp$listed_hpi & temp$purchased_year %in% c(2004:2011),])
+
+
+condf <- c("Cond. F. Stat","",round(condfstat(regs[[2]])[[1]],2),"",round(condfstat(regs[[4]])[[1]],2))
+
+printtable(regs,c("Loss-OLS","Loss-IV","No Loss-OLS","No Loss-IV"),depvar = dependent_var,note = c("Fixed Effects: listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list(""))
+
+
+```
+
+
+# Main Result - Split by Home Value
+
+
+```{r sunk_cost_housevalue_split}
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(adj_purch_price)+prop8_affected+sqft+age+beds+baths+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp[temp$purchased_amount < temp$purchased_hpi,])
+regs[[2]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$purchased_amount < temp$purchased_hpi,])
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp[temp$purchased_amount >= temp$purchased_hpi,])
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$purchased_amount >= temp$purchased_hpi,])
+
+
+condf <- c("Cond. F. Stat","",round(condfstat(regs[[2]])[[1]],2),"",round(condfstat(regs[[4]])[[1]],2))
+
+printtable(regs,c("Low Value OLS","Low Value IV","High Value OLS","High Value IV"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list("condf"))
+
+```
+
+# Main Result - Split by LTV
+
+```{r sunk_cost_ltv_split}
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+temp <- temp[!is.na(temp$LTV_purchase) ,]
+
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(adj_purch_price)+prop8_affected+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp[temp$LTV_purchase<0.8,])
+regs[[2]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$LTV_purchase<0.8,])
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp[temp$LTV_purchase>=0.8,])
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$LTV_purchase>=0.8,])
+
+
+condf <- c("Cond. F. Stat","",round(condfstat(regs[[2]])[[1]],2),"",round(condfstat(regs[[4]])[[1]],2))
+
+printtable(regs,c("LTV < 80 OLS","LTV < 80 IV","LTV >= 80 OLS","LTV >= 80 IV"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list("condf"))
+
+```
+
+# Main Result - Split by Market Activity
+```{r sunk_cost_liquidity_split}
+temp <- sold_data[sold_data$state %in% c("CA") ,]
+no_of_years = 5
+temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "log(purchased_hpi)+log(ownership_days)"
+cluster_var = "zip_listed_month"
+
+controls <- "log(adj_purch_price)+prop8_affected+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_month"
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(1,2,3,4,5,6,7),])
+regs[[2]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(1,2,3,4,5,6,7),])
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(8,9,10),])
+regs[[4]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp[temp$inventory_decile %in% c(8,9,10),])
+
+
+condf <- c("Cond. F. Stat","",round(condfstat(regs[[2]])[[1]],2),"",round(condfstat(regs[[4]])[[1]],2))
+
+printtable(regs,c("Low Liquidity OLS","Low Liquidity IV","High Liquidity OLS","High Liquidity IV"),depvar = dependent_var,note = c("Fixed Effects: zip x listed month","Standard Errors clustered by zip x listed month"),iv=instrument,list("condf"))
+
+```
+
+
+
+# Selling Price and Time-on-market 3SLS Regs (Stata)
+Data set is restricted to zipcodes with atleast 100 observations  and Zip * Listed Year fixed effects are used due to insufficient computing power.
+
+```{r stata_data}
+
+# temp <- sold_data[sold_data$state %in% c("CA") ,]
+# no_of_years = 5
+# temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+# temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+# temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+# temp <- temp[temp$listed_year>=2016 & temp$zip %in% morethan100zips,]
+# temp['time_on_market'] <- as.numeric(temp$sale_date - temp$listed_date)
+# temp<- temp[is.finite(log(temp$time_on_market)),]
+# 
+# library(foreign)
+# for (colname in names(temp)) {
+#   if (is.character(temp[[colname]])) {
+#     temp[[colname]] <- as.factor(temp[[colname]])
+#   }
+# }
+# 
+# write.dta(temp,file=paste(path,"stata_subset.dta",sep=""))
+
+# Stata Code=======================================================
+# set matsize 11000
+# use "C:\Dim\anchoring\stata_subset.dta", clear
+# gen log_property_tax_paid = log(property_tax_paid)
+# gen log_purchased_hpi  = log(purchased_hpi)
+# gen log_ownership_days   = log(ownership_days)
+# gen log_adj_purch_price   = log(adj_purch_price)
+# gen log_listing_amount   = log(listing_amount)
+# gen log_sales_price   = log(sales_price)
+# local controls "log_adj_purch_price i.prop8_affected sqft age beds baths Lot walk_score avg_school_rating avg_school_distance i.zip_listed_year"
+# *quietly: ivregress 2sls log_listing_amount log_adj_purch_price i.prop8_affected sqft age beds baths Lot walk_score walk_score avg_school_rating avg_school_distance i.zip_listed_year (log_property_tax_paid = log_purchased_hpi log_ownership_days), noconst
+# *quietly: reg3(proptax: log_property_tax_paid = log_purchased_hpi log_ownership_days `controls')(listprice: log_listing_amount = log_property_tax_paid `controls'), 2sls
+# eststo: quietly reg3(property_tax: log_property_tax_paid = log_purchased_hpi log_ownership_days `controls')(list_price: log_listing_amount = log_property_tax_paid `controls')(sales_price: log_sales_price = log_listing_amount `controls'),3sls
+# eststo: quietly reg3(property_tax: log_property_tax_paid = log_purchased_hpi log_ownership_days `controls')(list_price: log_listing_amount = log_property_tax_paid `controls')(time_on_market: time_on_market = log_listing_amount `controls'),3sls
+# esttab, wide drop(*.zip_listed_year)
+# End Stata Code ===================================================
+
+```
+
+<pre>
+
+----------------------------------------------------------------------
+                      (1)                                (2)                
+                Sales Price                        Days-on Market                
+----------------------------------------------------------------------
+<b>Model 1</b>
+Dep Var: log(Property Tax)                                                            
+log(purchased hpi)  0.383***      (66.73)        0.383***      (66.74)
+log(ownership days)-0.024***      (-7.23)      -0.0241***      (-7.20)
+log(adj_purch_pr)   0.674***     (104.49)        0.674***     (104.49)
+prop8_affected     0.0450***      (12.70)       0.0450***      (12.70)
+sqft             0.000110***      (32.66)     0.000110***      (32.66)
+age              -0.00278***     (-26.77)     -0.00278***     (-26.77)
+beds              0.00964***       (4.43)      0.00964***       (4.43)
+baths           -0.000669         (-0.38)    -0.000668         (-0.38)
+Lot            0.00000184***       (4.38)   0.00000184***       (4.38)
+walk_score      -0.000388***      (-4.62)    -0.000388***      (-4.62)
+school_rating      0.0156***       (9.72)       0.0156***       (9.72)
+school_distance   0.00189          (1.25)      0.00189          (1.25)
+_cons              -3.783***     (-30.83)       -3.784***     (-30.84)
+----------------------------------------------------------------------
+<b>Model 2</b>
+Dep Var: log(List Price)                                                            
+log(Property Tax)   0.176***      (19.05)        0.177***      (19.13)
+log(adj_purch_pr)   0.365***      (52.99)        0.364***      (52.85)
+prop8_affected    -0.0341***     (-12.98)      -0.0343***     (-13.05)
+sqft             0.000125***      (49.07)     0.000125***      (49.00)
+age               0.00147***      (19.63)      0.00147***      (19.67)
+beds              0.00211          (1.47)      0.00210          (1.46)
+baths             0.00478***       (4.09)      0.00478***       (4.09)
+Lot           -0.00000280***     (-10.09)  -0.00000281***     (-10.09)
+walk_score      -0.000584***     (-10.51)    -0.000584***     (-10.50)
+school_rating     0.00678***       (6.34)      0.00676***       (6.33)
+school_distance   0.00503***       (5.05)      0.00502***       (5.05)
+_cons               6.383***     (110.28)        6.381***     (110.24)
+----------------------------------------------------------------------
+<b>Model 3</b>
+Dep Var: log(sales price)                    Dep Var: Days on market                                                            
+log(List Price)     0.993***      (39.30)       2.220          (0.11)                           
+log(adj_purch_pr) 0.00011          (0.01)      -7.883         (-0.84)                            
+prop8_affected   0.000449          (0.50)       1.607*         (2.29)                             
+sqft           -0.0000175***      (-4.44)      0.0174***       (5.68)                             
+age             -0.000357***      (-8.39)       0.204***       (6.15)                             
+beds              0.00302***       (3.96)      -0.627         (-1.06)                             
+baths           -0.000471         (-0.75)       1.683***       (3.44)                             
+Lot           0.000000631***       (3.96)   -0.000330**       (-2.66)                             
+walk_score      0.0000738*         (2.19)     -0.0308         (-1.18)                            
+school_distance  0.000613          (1.01)      -1.177*        (-2.48)                            
+school_distance  -0.00147**       (-2.69)       1.878***       (4.43)                            
+_cons               0.104          (0.60)       117.5          (0.88)                             
+----------------------------------------------------------------------
+N                   20051                        20051                
+----------------------------------------------------------------------
+t statistics in parentheses
+* p<0.05, ** p<0.01, *** p<0.001
+
+</pre>
+
+
+```{r selling_price_3sls}
+# library(systemfit)
+# temp <- sold_data[sold_data$state %in% c("CA") ,]
+# no_of_years = 5
+# temp['property_tax_paid'] <- temp$listed_tax*no_of_years
+# temp <- temp[temp$purchased_year<=(2016-no_of_years),]
+# temp <- temp[temp$property_tax_paid>5000 & temp$property_tax_paid <200000,]
+# temp <- temp[temp$listed_year>=2016 & temp$zip %in% morethan100zips,]
+# temp['time_on_market'] <- as.numeric(temp$sale_date - temp$listed_date)
+# temp<- temp[is.finite(log(temp$time_on_market)),]
+# 
+# 
+# prop_tax <- as.formula("log(property_tax_paid)~log(purchased_hpi)+log(ownership_days)+log(adj_purch_price)+prop8_affected+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance+factor(zip_listed_year)")
+# list_price <- as.formula("log(listing_amount)~log(property_tax_paid)+log(adj_purch_price)+prop8_affected+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance+factor(zip_listed_year)")
+# sales_price <- as.formula("log(sales_price)~log(listing_amount)+log(adj_purch_price)+prop8_affected+sqft+age+beds+baths+log(Lot)+walk_score+walk_score+avg_school_rating+avg_school_distance+factor(zip_listed_year)")
+# 
+# system <- list( proptax = prop_tax, listprice = list_price, salesprice=sales_price)
+# inst <- ~ log(purchased_hpi)+log(ownership_days)
+# fit3sls <- systemfit( system, "3SLS", inst = inst,data = temp )
+
+```
+# Alternative identificatin strategy - Using Proposition 8
+Proposition 8 allows a temporary reduction in assessed value when real property suffers a decline in value. Property 8 reductions can be initiated by either the homeowner or by the Assessor. In a declining real estate market, the Assessor may choose not to apply the annual inflation factors  to a large number of properties. 
+
+If the assessor did not initiate a reduction, in order to be considered for Proposition 8 assessment, the homeowner should provide the assessor with information that supports his opinion that the market value for your property is less than the assessed value. According to BOE CA, the best supporting documentation is information on sales of comparable properties in your neighborhood. Owner should select two comparable sales that sold as close to the January 1 lien date as possible, but no later than March 31. The deadline for filling appeals for Proposition 8 reductions is Nov 30th or Sep 15th depending on the county.
+
+If the assessor did not initiate a reduction, property tax bills of similar homes in the same neighborhood can differ due to several reasons.
+
+* The evidence provided by the homeowners can be different and will result in differences in the revised assessment values
+* Some homeowners may miss the deadline to submit the evidence in the current year so proposition 8 effect will apply one year after
+* Some homeowners may not be aware of the procedure and this might result in filing for reductions sometime later
+
+These differences in assessment value <i>reductions</i> are unlikely to be related to home characteristics or seller characterisitcs and therefore can be used as an instrument for property taxes paid. 
+
+## Example 1: Difference due to missing deadline or not filing in the current year
+
+Both the homes 395 Avenida Le Cuesta (Home A) and 1706 Kenwood Pl (Home B) are  from the same zip code 92078. Both these homes were purchased in 2006 and were sold in 2016. Assessment value of Home A increased in year 2008 by 2% according to proposition 13, but the assessment value of Home B 
+decreased by 16% in year 2008.  However assessment value of Home A decreased by 23% in 2009 while assessment value in Home B decreased by only 10% in 2009. This means the homeowner in Home A did't file for propersition 8 reduction in 2008 or missed the deadline resulting in a higher property tax payment in year 2008 compared to Home B.  The graphs below shows this effect.
+
+For Home A, difference between proposition 13 assessment and actual assessment is \$1,058,824 which is 2 times the purchased price of the home A. For home B the difference is \$1,395,794 which is 2.26 times the purchased price. This difference can be used as an instrumet for property taxes paid. 
+
+```{r prop8_graph1}
+years <- 2007:2015
+homeA_13 <- c(530000, 540600,551412,550105.2,554247.4,565332.4,576639.0,579257.0,590830.5)
+homeA_8  <- c(530000, 540600, 415000, 391000, 391000, 328000, 349000, 480000, 555000)
+homeB_13 <- c(629850.0,642447.0,655295.9,653742.9,658665.6,671838.9,685275.7,688386.8,702140.8)
+homeB_8 <- c(629850,530000,477000,477000,477000,418000,418000,565000,600000)
+
+homeA <- as.data.frame(cbind(c(years,years),c(homeA_13,homeA_8)))
+homeA['group'] <- "Proposition 13"
+homeA[10:18,'group'] = "Actual"
+names(homeA) <- c("year","Assessment","group")
+
+ggplot(data=homeA, aes(x=year, y=Assessment, group = group, colour = group)) + geom_line(aes(linetype=group), size=1) +scale_linetype_manual(values = c(1,2))+scale_colour_manual(values=c("black","gray40"))+ theme_bw()+ geom_point( size=2, fill="white")+ theme(legend.position="bottom")+ylab("Assessment Value ($)")+ scale_y_continuous(label=comma)+theme(axis.title.x =  element_blank(),legend.title=element_blank())+labs(title = "Home A")
+
+homeB <- as.data.frame(cbind(c(years,years),c(homeB_13,homeB_8)))
+homeB['group'] <- "Proposition 13"
+homeB[10:18,'group'] = "Actual"
+names(homeB) <- c("year","Assessment","group")
+
+ggplot(data=homeB, aes(x=year, y=Assessment, group = group, colour = group)) + geom_line(aes(linetype=group), size=1) +scale_linetype_manual(values = c(1,2))+scale_colour_manual(values=c("black","gray40"))+ theme_bw()+ geom_point( size=2, fill="white")+ theme(legend.position="bottom")+ylab("Assessment Value ($)")+ scale_y_continuous(label=comma)+theme(axis.title.x =  element_blank(),legend.title=element_blank())+labs(title = "Home B")
+```
+
+## Example 2: Differences due to evidence
+Both homes, 160 Providence Pl (A) and  313 Bradley Dr (B) are from the same zip code 95687. Both were purchased in 2006 for 482,000 and 483,500 respectively and were sold in 2016. Proposition 8 was applied to both these properties in 2008. Eventhough both properties were purchased around the same time for the same amount, there is some difference in the assessment value after proposition 8 took effect. 
+
+For Home A, difference between proposition 13 assessment and actual assessment is 3.92 times the purchased price and for home B the difference is  3.56 times the purchased price. This difference can be used as an instrumet for property taxes paid. 
+
+```{r prop8_graph2}
+years <- 2007:2015
+homeA_13 <- c(482000.0, 491640.0,501472.8,500284.3,504051.5,514132.5,524415.1,526796.0,537321.4)
+homeA_8  <- c(482000, 362000, 220000, 263000, 240000, 219000, 253000, 303000, 348000)
+homeB_13 <- c(483500.0,493170.0,503033.4,501841.1,505620.1,515732.5,526047.1,528435.4,538993.5)
+homeB_8 <- c(483500,363000,301000,247000,241000,241000,270000,353000,373000)
+
+homeA <- as.data.frame(cbind(c(years,years,years,years),c(homeA_13,homeA_8,homeB_13,homeB_8)))
+homeA['group'] <- "Home A - Proposition 13"
+homeA[10:18,'group'] = "Home A - Actual"
+homeA[19:27,'group'] = "Home B - Proposition 13"
+homeA[28:36,'group'] = "Home B - Actual"
+names(homeA) <- c("year","Assessment","group")
+
+ggplot(data=homeA, aes(x=year, y=Assessment, group = group, colour = group)) + geom_line(aes(linetype=group), size=1) +scale_linetype_manual(values = c(1,2,1,2))+scale_colour_manual(values=c("black","gray60","gray40","gray60"))+ theme_bw()+ geom_point( size=2, fill="white")+ theme(legend.position="bottom")+ylab("Assessment Value ($)")+ scale_y_continuous(label=comma)+theme(axis.title.x =  element_blank(),legend.title=element_blank())+labs(title = "")
+```
+
+## Regression
+
+The following regression uses homes purchased in 2006 and sold in 2016. The sum of difference between the proposition 13 assessment and acutal assessment normalized by the purchased price is used as the instrument for property taxes paid.
+
+Results are similar for purchased years 2004, 05, 07 and 08.
+
+```{r prop8identification}
+year <- c(2004:2015)
+infac <- c(1.01867,1.02,1.02,1.02,1.02,1.02,0.99763,1.00753,1.02,1.02,1.00454,1.01998)
+inflation.factors <- data.frame(year,infac)
+
+start = 2006
+end = 2016
+
+temp <- sold_data[sold_data$purchased_year==start & sold_data$listed_year>=end,]
+temp <- temp[temp$prop8_affected==1,]
+
+taxstring = "("
+for(i in (start+1):(end-1)) {
+  taxstring = paste(taxstring,"+temp$assesment_",i,sep="")
+}
+taxstring = paste(taxstring,")/100",sep="")
+eval(parse(text=paste("temp['property_tax_paid'] <- ",taxstring,sep="")))
+
+
+assessment_data <- matrix(nrow = nrow(temp)*15, ncol = 6)
+
+rowno = 1
+pb <- txtProgressBar(min = 1, max = nrow(temp), initial = 1)
+for(i in 1:nrow(temp)) {
+    setTxtProgressBar(pb, i)
+    start = temp[i,]$purchased_year
+    end = temp[i,]$listed_year-1
+    purchased_amount = temp[i,]$purchased_amount 
+    basevalue1 = temp[i,]$purchased_amount 
+    basevalue2 = basevalue1 * inflation.factors[inflation.factors$year==(start+1),]$infac
+    zip = temp[i,]$zip
+    link  = temp[i,]$link
+    if(is.na(start) | is.na(end)) next
+    if(start<=2004) next
+    tryCatch({
+      # eval(parse(text=paste("assessment_data[rowno,] <- c(link,start,basevalue,temp[i,]$assesment_",start,")",sep="")))
+      # rowno = rowno+1
+    })
+    end = min(end,2015)
+    if(end>start) {
+      # tryCatch({
+        for(j in (start+1):(end)) {
+          if(j==(start+1)) {
+            eval(parse(text=paste("b1 = abs(basevalue1 - temp[i,]$assesment_",j,")",sep="")))
+            eval(parse(text=paste("b2 = abs(basevalue1*inflation.factors[inflation.factors$year==start,]$infac-temp[i,]$assesment_",j,")",sep="")))
+            eval(parse(text=paste("b3 = abs(basevalue2 - temp[i,]$assesment_",j,")",sep="")))
+            eval(parse(text=paste("b4 = abs(basevalue2*inflation.factors[inflation.factors$year==start,]$infac-temp[i,]$assesment_",j,")",sep="")))
+            minvalue = which(c(b1,b2,b3,b4)==min(b1,b2,b3,b4))[1]
+            if(!is.na(b1) & !is.na(b2)) {
+              if(minvalue==1) {
+                basevalue = basevalue1
+              }
+              if(minvalue==2) {
+                basevalue = basevalue1*inflation.factors[inflation.factors$year==start,]$infac 
+              }
+              if(minvalue==3) {
+                basevalue = basevalue2
+              }
+              if(minvalue==4) {
+                basevalue = basevalue2*inflation.factors[inflation.factors$year==start,]$infac 
+              }
+            }
+          } else {
+            basevalue = basevalue*inflation.factors[inflation.factors$year==j,]$infac  
+          }
+          
+          eval(parse(text=paste("assessment_data[rowno,] <- c(link,zip,j,basevalue,temp[i,]$assesment_",j,",purchased_amount)",sep="")))
+          rowno = rowno+1
+        }
+      # })
+    }
+}
+
+assessment_data <- as.data.frame(assessment_data)
+names(assessment_data)<- c("link","zip","year","prop13_assessment","actual_assessment","purchased_amount")
+assessment_data <- data.frame(lapply(assessment_data, as.character), stringsAsFactors=FALSE)
+assessment_data <- assessment_data[!is.na(assessment_data$link),]
+assessment_data$year <- as.integer(assessment_data$year)
+assessment_data$prop13_assessment <- as.numeric(assessment_data$prop13_assessment)
+assessment_data$actual_assessment <- as.numeric(assessment_data$actual_assessment)
+assessment_data$purchased_amount <- as.numeric(assessment_data$purchased_amount)
+
+assessment_data <- assessment_data[!assessment_data$link %in% unique(assessment_data[assessment_data$actual_assessment==0,]$link),]
+assessment_data['asmt_diff'] <- (assessment_data$prop13_assessment - assessment_data$actual_assessment)*100/assessment_data$prop13_assessment
+
+assessment_data['diff'] <- assessment_data$prop13_assessment - assessment_data$actual_assessment
+
+t3 <- ddply(assessment_data,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
+t3['diff_pct'] <- t3$diff/(t3$purchprice*100)
+
+temp <- merge(temp,t3,by="link")
+
+dependent_var = "log(listing_amount)"
+endo_var = "log(property_tax_paid)"
+instrument = "diff_pct"
+cluster_var = "zip"
+
+controls <- "log(adj_purch_price)+sqft+age+beds+baths+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_year"
+
+
+regs <- list()
+regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[2]] <- felm(as.formula(paste(endo_var,"~",instrument,"+",controls,"|0|",cluster_var,sep="")),data = temp)
+regs[[3]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+
+
+ condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2))
+
+printtable(regs,c("OLS","First Stage","IV"),depvar = dependent_var,note = c(""),iv=instrument,list(condf))
+
+t <- as.data.frame(table(assessment_data$zip))
+
+t2 <- assessment_data[assessment_data$zip==92078,] #92130 #93722
+t2['diff'] <- t2$prop13_assessment - t2$actual_assessment
+t2.2<- t2[t2$link %in% c(t2[c("10630"),]$link,t2[c("4069"),]$link),]
+t2.2 <- ddply(t2.2,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
+t2.2['diff_pct'] <- t2.2$diff/(t2.2$purchprice)
+
+
+t3 <- assessment_data[assessment_data$zip==95687,] #92130 #93722 93536
+t3['diff'] <- t3$prop13_assessment - t3$actual_assessment
+
+t3.2<- t3[t3$link %in% c(t3[c("3592"),]$link,t3[c("8920"),]$link),]
+t3.2 <- ddply(t3.2,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
+t3.2['diff_pct'] <- t3.2$diff/(t3.2$purchprice)
+
+# View(t2[t2$link %in% t2.2[c(6,8),]$link,])
+```
+
