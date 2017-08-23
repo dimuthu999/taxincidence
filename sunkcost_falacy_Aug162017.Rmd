@@ -704,7 +704,6 @@ Data set is restricted to zipcodes with atleast 100 observations  and Zip * List
 ```
 
 <pre>
-
 ----------------------------------------------------------------------
                       (1)                                (2)                
                 Sales Price                        Days-on Market                
@@ -742,18 +741,17 @@ _cons               6.383***     (110.28)        6.381***     (110.24)
 ----------------------------------------------------------------------
 <b>Model 3</b>
 Dep Var: log(sales price)                    Dep Var: Days on market                                                            
-log(List Price)     0.993***      (39.30)       2.220          (0.11)                           
-log(adj_purch_pr) 0.00011          (0.01)      -7.883         (-0.84)                            
-prop8_affected   0.000449          (0.50)       1.607*         (2.29)                             
-sqft           -0.0000175***      (-4.44)      0.0174***       (5.68)                             
-age             -0.000357***      (-8.39)       0.204***       (6.15)                             
-beds              0.00302***       (3.96)      -0.627         (-1.06)                             
-baths           -0.000471         (-0.75)       1.683***       (3.44)                             
-Lot           0.000000631***       (3.96)   -0.000330**       (-2.66)                             
-walk_score      0.0000738*         (2.19)     -0.0308         (-1.18)                            
-school_distance  0.000613          (1.01)      -1.177*        (-2.48)                            
-school_distance  -0.00147**       (-2.69)       1.878***       (4.43)                            
-_cons               0.104          (0.60)       117.5          (0.88)                             
+log(List Price)     0.993***      (215.46)     -14.12***      (-3.93)                           
+prop8_affected   0.000448          (0.50)       1.676*         (2.39)                             
+sqft           -0.0000176***      (-4.44)      0.0198***       (5.68)                             
+age             -0.000358***      (-8.39)       0.219***       (6.15)                             
+beds              0.00302***       (3.96)      -0.573         (-1.06)                             
+baths           -0.000472         (-0.75)       1.759***       (3.44)                             
+Lot           0.000000632***       (3.96)   -0.000371**       (-2.66)                             
+walk_score      0.0000741*         (2.19)     -0.0412         (-1.18)                            
+school_distance  0.000609          (1.01)      -1.024*        (-2.48)                            
+school_distance  -0.00147**       (-2.69)       1.974***       (4.80)                            
+_cons               0.101          (0.60)       224.5          (4.88)                             
 ----------------------------------------------------------------------
 N                   20051                        20051                
 ----------------------------------------------------------------------
@@ -761,6 +759,7 @@ t statistics in parentheses
 * p<0.05, ** p<0.01, *** p<0.001
 
 </pre>
+
 
 
 ```{r selling_price_3sls}
@@ -802,7 +801,7 @@ These differences in assessment value <i>reductions</i> are unlikely to be relat
 Both the homes 395 Avenida Le Cuesta (Home A) and 1706 Kenwood Pl (Home B) are  from the same zip code 92078. Both these homes were purchased in 2006 and were sold in 2016. Assessment value of Home A increased in year 2008 by 2% according to proposition 13, but the assessment value of Home B 
 decreased by 16% in year 2008.  However assessment value of Home A decreased by 23% in 2009 while assessment value in Home B decreased by only 10% in 2009. This means the homeowner in Home A did't file for propersition 8 reduction in 2008 or missed the deadline resulting in a higher property tax payment in year 2008 compared to Home B.  The graphs below shows this effect.
 
-For Home A, difference between proposition 13 assessment and actual assessment is \$1,058,824 which is 2 times the purchased price of the home A. For home B the difference is \$1,395,794 which is 2.26 times the purchased price. This difference can be used as an instrumet for property taxes paid. 
+For Home A, difference between proposition 13 assessment and actual assessment is \$1,058,824 which is 2 times the purchased price of the home A. For home B the difference is \$1,395,794 which is 2.26 times the purchased price. This difference leads to differences in property taxes paid. 
 
 ```{r prop8_graph1}
 years <- 2007:2015
@@ -829,7 +828,7 @@ ggplot(data=homeB, aes(x=year, y=Assessment, group = group, colour = group)) + g
 ## Example 2: Differences due to evidence
 Both homes, 160 Providence Pl (A) and  313 Bradley Dr (B) are from the same zip code 95687. Both were purchased in 2006 for 482,000 and 483,500 respectively and were sold in 2016. Proposition 8 was applied to both these properties in 2008. Eventhough both properties were purchased around the same time for the same amount, there is some difference in the assessment value after proposition 8 took effect. 
 
-For Home A, difference between proposition 13 assessment and actual assessment is 3.92 times the purchased price and for home B the difference is  3.56 times the purchased price. This difference can be used as an instrumet for property taxes paid. 
+For Home A, difference between proposition 13 assessment and actual assessment is 3.92 times the purchased price and for home B the difference is  3.56 times the purchased price. This difference leads to differences in property taxes paid. 
 
 ```{r prop8_graph2}
 years <- 2007:2015
@@ -850,20 +849,27 @@ ggplot(data=homeA, aes(x=year, y=Assessment, group = group, colour = group)) + g
 
 ## Regression
 
-The following regression uses homes purchased in 2006 and sold in 2016. The sum of difference between the proposition 13 assessment and acutal assessment normalized by the purchased price is used as the instrument for property taxes paid.
+The following regression uses homes purchased in 2006 and sold in 2016. 
+
+First total property taxes paid from 2007 to 2015 are regressed on the actual assessment value in 2007 with zip code fixed effects.
+
+$$ log(Property taxes paid) = \alpha + \beta log(2007 assessment value) + i.zip $$
+
+The residual of this regression captures the deviations of of assessment values from the 'true' proposition 8 assessment values due to the reasons mentioned above. Therefore this residual can be used as an instrument for property taxes paid.
 
 Results are similar for purchased years 2004, 05, 07 and 08.
 
 ```{r prop8identification}
-year <- c(2004:2015)
-infac <- c(1.01867,1.02,1.02,1.02,1.02,1.02,0.99763,1.00753,1.02,1.02,1.00454,1.01998)
+year <- c(2000:2015)
+infac <- c(1.02,1.02,1.02,1.02,1.01867,1.02,1.02,1.02,1.02,1.02,0.99763,1.00753,1.02,1.02,1.00454,1.01998)
 inflation.factors <- data.frame(year,infac)
 
-start = 2006
+start = 2005
+start_org  =start
 end = 2016
 
-temp <- sold_data[sold_data$purchased_year==start & sold_data$listed_year>=end,]
-temp <- temp[temp$prop8_affected==1,]
+temp <- sold_data[sold_data$purchased_year==start & sold_data$listed_year==end,]
+# temp <- temp[temp$prop8_affected==1,]
 
 taxstring = "("
 for(i in (start+1):(end-1)) {
@@ -887,7 +893,7 @@ for(i in 1:nrow(temp)) {
     zip = temp[i,]$zip
     link  = temp[i,]$link
     if(is.na(start) | is.na(end)) next
-    if(start<=2004) next
+    if(start<2003) next
     tryCatch({
       # eval(parse(text=paste("assessment_data[rowno,] <- c(link,start,basevalue,temp[i,]$assesment_",start,")",sep="")))
       # rowno = rowno+1
@@ -945,41 +951,56 @@ t3 <- ddply(assessment_data,.(link),summarise,diff = sum(diff,na.rm = TRUE),purc
 t3['diff_pct'] <- t3$diff/(t3$purchprice*100)
 
 temp <- merge(temp,t3,by="link")
+temp <- temp[!is.na(temp$property_tax_paid),]
+
+proptax_reg <- felm(as.formula(paste("log(property_tax_paid)~log(assesment_",(start_org+1),")|zip",sep="")),data=temp)
+temp['proptax_resid'] <- proptax_reg$residuals
 
 dependent_var = "log(listing_amount)"
 endo_var = "log(property_tax_paid)"
-instrument = "diff_pct"
-cluster_var = "zip"
+instrument = "proptax_resid"
+cluster_var = "0"
 
-controls <- "log(adj_purch_price)+sqft+age+beds+baths+Lot+walk_score+walk_score+avg_school_rating+avg_school_distance|zip_listed_year"
+temp$sqft <- ifelse(is.na(temp$sqft),mean(temp$sqft,na.rm=TRUE),temp$sqft)
+temp$age <- ifelse(is.na(temp$age),mean(temp$age,na.rm=TRUE),temp$age)
+temp$beds <- ifelse(is.na(temp$beds),mean(temp$beds,na.rm=TRUE),temp$beds)
+temp$baths <- ifelse(is.na(temp$baths),mean(temp$baths,na.rm=TRUE),temp$baths)
+temp$Lot <- ifelse(is.na(temp$Lot),mean(temp$Lot,na.rm=TRUE),temp$Lot)
+temp$walk_score <- ifelse(is.na(temp$walk_score),mean(temp$walk_score,na.rm=TRUE),temp$walk_score)
+temp$avg_school_rating <- ifelse(is.na(temp$avg_school_rating),mean(temp$avg_school_rating,na.rm=TRUE),temp$avg_school_rating)
+temp$avg_school_distance <- ifelse(is.na(temp$avg_school_distance),mean(temp$avg_school_distance,na.rm=TRUE),temp$avg_school_distance)
+
+
+controls <- "log(adj_purch_price)+sqft+age+beds+baths+Lot++walk_score+avg_school_rating+avg_school_distance|zip"
+# controls <- "log(adj_purch_price)|zip"
 
 
 regs <- list()
 regs[[1]] <- felm(as.formula(paste(dependent_var,"~",endo_var,"+",controls,"|0|",cluster_var,sep="")),data = temp)
 regs[[2]] <- felm(as.formula(paste(endo_var,"~",instrument,"+",controls,"|0|",cluster_var,sep="")),data = temp)
 regs[[3]] <- felm(as.formula(paste(dependent_var,"~",controls,"|(",endo_var,"~",instrument,")|",cluster_var,sep="")),data = temp)
+regs[[4]] <- proptax_reg
 
 
- condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2))
+ condf <- c("Cond. F. Stat","","",round(condfstat(regs[[3]])[[1]],2),"")
 
-printtable(regs,c("OLS","First Stage","IV"),depvar = dependent_var,note = c(""),iv=instrument,list(condf))
+printtable(regs,c("OLS","First Stage","IV","Prop.Tax"),depvar = dependent_var,note = c(""),iv=instrument,list(condf))
+# 
+# t <- as.data.frame(table(assessment_data$zip))
+# 
+# t2 <- assessment_data[assessment_data$zip==92078,] #92130 #93722
+# t2['diff'] <- t2$prop13_assessment - t2$actual_assessment
+# t2.2<- t2[t2$link %in% c(t2[c("10630"),]$link,t2[c("4069"),]$link),]
+# t2.2 <- ddply(t2.2,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
+# t2.2['diff_pct'] <- t2.2$diff/(t2.2$purchprice)
+# 
+# 
+# t3 <- assessment_data[assessment_data$zip==95687,] #92130 #93722 93536
+# t3['diff'] <- t3$prop13_assessment - t3$actual_assessment
+# 
+# t3.2<- t3[t3$link %in% c(t3[c("3592"),]$link,t3[c("8920"),]$link),]
+# t3.2 <- ddply(t3.2,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
+# t3.2['diff_pct'] <- t3.2$diff/(t3.2$purchprice)
 
-t <- as.data.frame(table(assessment_data$zip))
-
-t2 <- assessment_data[assessment_data$zip==92078,] #92130 #93722
-t2['diff'] <- t2$prop13_assessment - t2$actual_assessment
-t2.2<- t2[t2$link %in% c(t2[c("10630"),]$link,t2[c("4069"),]$link),]
-t2.2 <- ddply(t2.2,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
-t2.2['diff_pct'] <- t2.2$diff/(t2.2$purchprice)
-
-
-t3 <- assessment_data[assessment_data$zip==95687,] #92130 #93722 93536
-t3['diff'] <- t3$prop13_assessment - t3$actual_assessment
-
-t3.2<- t3[t3$link %in% c(t3[c("3592"),]$link,t3[c("8920"),]$link),]
-t3.2 <- ddply(t3.2,.(link),summarise,diff = sum(diff,na.rm = TRUE),purchprice = min(purchased_amount,na.rm = TRUE))
-t3.2['diff_pct'] <- t3.2$diff/(t3.2$purchprice)
-
-# View(t2[t2$link %in% t2.2[c(6,8),]$link,])
 ```
 
